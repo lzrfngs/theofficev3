@@ -1,0 +1,746 @@
+/* ============================================================
+   VELLUM DESIGN SYSTEM INTEGRATION
+   ============================================================ */
+@import "../Vellum v0.1/tokens.css";
+@import "../Vellum v0.1/components.css";
+
+/* App-specific custom colors, mapped to Vellum structure */
+:root {
+  --color-secretary: oklch(0.72 0.13 285);     /* Soft Lavender */
+  --color-writer: oklch(0.78 0.16 80);         /* Warm Amber */
+  --color-strategist: oklch(0.76 0.14 162);      /* Sage Emerald */
+  --color-anthropologist: oklch(0.72 0.15 15);  /* Rose Sand */
+  --color-tech: oklch(0.74 0.13 220);          /* Slate Cyan */
+
+  /* Glowing accents */
+  --glow-secretary: 0 0 20px oklch(from var(--color-secretary) l c h / 0.20);
+  --glow-writer: 0 0 20px oklch(from var(--color-writer) l c h / 0.20);
+  --glow-strategist: 0 0 20px oklch(from var(--color-strategist) l c h / 0.20);
+  --glow-anthropologist: 0 0 20px oklch(from var(--color-anthropologist) l c h / 0.20);
+  --glow-tech: 0 0 20px oklch(from var(--color-tech) l c h / 0.20);
+}
+
+/* Base layouts */
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--surface-0);
+  font-family: var(--font-sans);
+  color: var(--ink-1);
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  padding: var(--space-4);
+  gap: var(--space-4);
+  z-index: 1;
+  position: relative;
+}
+
+/* Custom Footer Bar styled with Vellum navbar */
+.footer-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-5);
+  height: 56px;
+  background: var(--frost-bg-strong);
+  backdrop-filter: saturate(160%) blur(16px);
+  -webkit-backdrop-filter: saturate(160%) blur(16px);
+  border-radius: var(--r-lg);
+  box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-md);
+  flex-shrink: 0;
+}
+
+.agent-switcher {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-x: auto;
+  color: var(--ink-3);
+}
+
+.agent-switcher__button {
+  height: 30px;
+  padding: 0 var(--space-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-1);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--dur-1), border-color var(--dur-1), background var(--dur-1);
+}
+
+.agent-switcher__button:hover,
+.agent-switcher__button.is-selected {
+  color: var(--ink-1);
+  opacity: 1;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 36% 64%;
+  flex-grow: 1;
+  gap: var(--space-4);
+  height: calc(100vh - 104px);
+  overflow: hidden;
+}
+
+.left-column {
+  height: 100%;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.right-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: var(--space-4);
+  height: 100%;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+.right-grid > div {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Agent Panel styled with Vellum card */
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface-1);
+  border-radius: var(--r-lg);
+  box-shadow: var(--edge-ring), var(--shadow-sm);
+  transition: all var(--dur-3) var(--ease-out);
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.agent-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  padding: 1px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Glowing active outlines adapted to Vellum values */
+.agent-card.active-secretary {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-secretary);
+  border-color: var(--color-secretary);
+}
+.agent-card.active-writer {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-writer);
+  border-color: var(--color-writer);
+}
+.agent-card.active-strategist {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-strategist);
+  border-color: var(--color-strategist);
+}
+.agent-card.active-anthropologist {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-anthropologist);
+  border-color: var(--color-anthropologist);
+}
+.agent-card.active-tech {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-tech);
+  border-color: var(--color-tech);
+}
+
+/* Agent Header */
+.agent-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--line-1);
+  flex-shrink: 0;
+}
+
+.portrait-container {
+  position: relative;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface-3);
+  box-shadow: var(--edge-ring), var(--shadow-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.portrait-large {
+  width: 130px;
+  height: 130px;
+}
+
+.portrait-small {
+  width: 78px;
+  height: 78px;
+}
+
+.portrait-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.portrait-placeholder {
+  font-family: var(--font-serif);
+  font-size: var(--fs-40);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.portrait-small .portrait-placeholder {
+  font-size: var(--fs-28);
+}
+
+/* Full-width vertical portrait layout for Penny */
+.agent-header-vertical {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--line-1);
+  flex-shrink: 0;
+}
+
+.portrait-container-full {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--surface-3);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top-left-radius: calc(var(--r-lg) - 1px);
+  border-top-right-radius: calc(var(--r-lg) - 1px);
+}
+
+.portrait-img-full {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.portrait-placeholder-full {
+  font-family: var(--font-serif);
+  font-size: var(--fs-48);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.agent-meta-vertical {
+  padding: var(--space-4);
+  background: var(--surface-1);
+}
+
+.agent-meta {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.agent-name {
+  font-family: var(--font-serif);
+  font-size: var(--fs-18);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.agent-card-small .agent-name {
+  font-size: var(--fs-15);
+}
+
+.agent-title {
+  font-size: var(--fs-12);
+  color: var(--ink-2);
+  margin-top: var(--space-1);
+}
+
+/* Chat timeline */
+.chat-console {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  overflow: hidden;
+  background: var(--surface-0);
+}
+
+.chat-history {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+  animation: slideIn var(--dur-3) var(--ease-out) forwards;
+}
+
+.message-user {
+  align-self: flex-end;
+}
+
+.message-agent {
+  align-self: flex-start;
+}
+
+.message-bubble {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--r-md);
+  font-size: var(--fs-14);
+  line-height: var(--lh-normal);
+  word-break: break-word;
+}
+
+.message-user .message-bubble {
+  background: var(--accent);
+  color: var(--accent-contrast) !important;
+  border-top-right-radius: var(--r-xs);
+  box-shadow: var(--shadow-sm);
+}
+
+.message-user .message-bubble * {
+  color: var(--accent-contrast) !important;
+}
+
+.message-agent .message-bubble {
+  background: var(--surface-1);
+  border: 1px solid var(--line-1);
+  border-top-left-radius: var(--r-xs);
+  color: var(--ink-1);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Agent Thought / Tool Execution Bubble style */
+.message-thought {
+  background: var(--surface-3) !important;
+  border: 1px dashed var(--line-2) !important;
+  color: var(--ink-2) !important;
+  font-family: var(--font-mono);
+  font-size: var(--fs-12) !important;
+  padding: var(--space-2) var(--space-3) !important;
+}
+
+.message-sender {
+  font-size: var(--fs-11);
+  font-weight: var(--fw-medium);
+  color: var(--ink-3);
+  margin-bottom: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.message-time {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  color: var(--ink-4);
+}
+
+/* Chat Input Bar */
+.chat-input-bar {
+  display: flex;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--line-1);
+  background: var(--surface-1);
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.chat-input {
+  flex-grow: 1;
+  background-color: var(--surface-1) !important;
+  color: var(--ink-1) !important;
+}
+
+.chat-input::placeholder {
+  color: var(--ink-3) !important;
+}
+
+/* Ensure all inputs and selects across the app respect high-contrast design system tokens */
+.input {
+  background-color: var(--surface-1) !important;
+  color: var(--ink-1) !important;
+}
+
+.input::placeholder {
+  color: var(--ink-3) !important;
+}
+
+/* Dynamic Typing Indicator dot animations */
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 8px;
+}
+
+.typing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+/* Custom settings overlay and panels mapped to Vellum */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: oklch(0 0 0 / 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-content {
+  background: var(--frost-bg-strong);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border-radius: var(--r-xl);
+  box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-xl);
+  padding: var(--space-6);
+  width: min(500px, 92%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  animation: modalScale var(--dur-3) var(--ease-spring) forwards;
+}
+
+@keyframes modalScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* System Prompt Inspector popup */
+.inspector-popup {
+  position: absolute;
+  top: 60px;
+  right: var(--space-4);
+  width: 340px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--frost-bg-strong);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-radius: var(--r-lg);
+  box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-lg);
+  z-index: 20;
+}
+
+.inspector-close {
+  cursor: pointer;
+  color: var(--ink-3);
+  transition: color var(--dur-1);
+}
+
+.inspector-close:hover {
+  color: var(--ink-1);
+}
+
+/* Dark mode overrides for background rendering */
+[data-theme="dark"] .chat-console {
+  background: oklch(0.15 0.005 80);
+}
+[data-theme="dark"] .chat-input-bar {
+  background: oklch(0.18 0.005 80);
+}
+
+
+
+/* Markdown styling inside bubbles */
+.markdown-content h2, .markdown-content h3, .markdown-content h4 {
+  font-family: var(--font-serif);
+  color: var(--ink-1);
+}
+.markdown-content blockquote {
+  font-family: var(--font-serif);
+  border-left: 3px solid var(--accent);
+}
+.markdown-content table {
+  background: var(--surface-2);
+  border-color: var(--line-1);
+}
+.markdown-content table td {
+  border-color: var(--line-1);
+  color: var(--ink-2);
+}
+.markdown-content table tr:hover {
+  background: var(--surface-3);
+}
+
+/* ============================================================
+   TAILWIND UTILITY REPLACEMENTS
+   ============================================================ */
+.h-full {
+  height: 100% !important;
+}
+.w-full {
+  width: 100% !important;
+}
+.max-w-2xl {
+  max-width: 42rem !important;
+}
+.relative {
+  position: relative !important;
+}
+.absolute {
+  position: absolute !important;
+}
+.fixed {
+  position: fixed !important;
+}
+.inset-0 {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+}
+.z-10 {
+  z-index: 10 !important;
+}
+.block {
+  display: block !important;
+}
+.hidden {
+  display: none !important;
+}
+.flex {
+  display: flex !important;
+}
+.inline-flex {
+  display: inline-flex !important;
+}
+.flex-col {
+  flex-direction: column !important;
+}
+.items-center {
+  align-items: center !important;
+}
+.justify-between {
+  justify-content: space-between !important;
+}
+.justify-center {
+  justify-content: center !important;
+}
+.flex-shrink-0, .shrink-0 {
+  flex-shrink: 0 !important;
+}
+.flex-grow {
+  flex-grow: 1 !important;
+}
+.overflow-hidden {
+  overflow: hidden !important;
+}
+.overflow-y-auto {
+  overflow-y: auto !important;
+}
+.overflow-x-auto {
+  overflow-x: auto !important;
+}
+
+/* Gaps */
+.gap-0\.5 { gap: 0.125rem !important; }
+.gap-1 { gap: 0.25rem !important; }
+.gap-1\.5 { gap: 0.375rem !important; }
+.gap-2 { gap: 0.5rem !important; }
+.gap-3 { gap: 0.75rem !important; }
+.gap-4 { gap: 1rem !important; }
+.gap-6 { gap: 1.5rem !important; }
+
+/* Margins & Paddings */
+.mt-2 { margin-top: 0.5rem !important; }
+.mt-3 { margin-top: 0.75rem !important; }
+.mt-4 { margin-top: 1rem !important; }
+.mb-1 { margin-bottom: 0.25rem !important; }
+.mb-2 { margin-bottom: 0.5rem !important; }
+.mb-3 { margin-bottom: 0.75rem !important; }
+.my-2 { margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
+.my-3 { margin-top: 0.75rem !important; margin-bottom: 0.75rem !important; }
+.pt-2\.5 { padding-top: 0.625rem !important; }
+.pb-2 { padding-bottom: 0.5rem !important; }
+.pl-3 { padding-left: 0.75rem !important; }
+.pr-2 { padding-right: 0.5rem !important; }
+.p-3 { padding: 0.75rem !important; }
+.p-4 { padding: 1rem !important; }
+.p-6 { padding: 1.5rem !important; }
+.px-3 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+.py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+.py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+.px-1 { padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
+.py-0\.5 { padding-top: 0.125rem !important; padding-bottom: 0.125rem !important; }
+
+/* Borders & Rounding */
+.border { border: 1px solid var(--line-2) !important; }
+.border-t { border-top: 1px solid var(--line-2) !important; }
+.border-b { border-bottom: 1px solid var(--line-2) !important; }
+.border-r { border-right: 1px solid var(--line-2) !important; }
+.border-dashed { border-style: dashed !important; }
+.border-slate-800\/40 { border-color: rgba(30, 41, 59, 0.4) !important; }
+.border-slate-800 { border-color: var(--line-2) !important; }
+.border-slate-700\/60 { border-color: var(--line-2) !important; }
+.border-slate-700\/80 { border-color: var(--line-2) !important; }
+.rounded { border-radius: var(--r-sm) !important; }
+.rounded-r { border-top-right-radius: var(--r-md) !important; border-bottom-right-radius: var(--r-md) !important; }
+.rounded-lg { border-radius: var(--r-lg) !important; }
+
+/* Text & Colors */
+.text-xs { font-size: var(--fs-12) !important; }
+.text-sm { font-size: var(--fs-13) !important; }
+.text-md { font-size: var(--fs-14) !important; }
+.text-lg { font-size: var(--fs-16) !important; }
+.text-xl { font-size: var(--fs-20) !important; }
+.font-bold { font-weight: 700 !important; }
+.font-semibold { font-weight: 600 !important; }
+.font-medium { font-weight: 500 !important; }
+.italic { font-style: italic !important; }
+.text-center { text-align: center !important; }
+.text-slate-100 { color: var(--ink-1) !important; }
+.text-slate-200 { color: var(--ink-1) !important; }
+.text-slate-300 { color: var(--ink-2) !important; }
+.text-slate-400 { color: var(--ink-2) !important; }
+.text-slate-500 { color: var(--ink-3) !important; }
+.text-rose-400 { color: var(--accent) !important; }
+.text-emerald-400 { color: var(--color-strategist) !important; }
+.bg-slate-950 { background-color: var(--surface-3) !important; }
+.bg-slate-900\/50 { background-color: var(--surface-2) !important; }
+.bg-slate-900\/40 { background-color: var(--surface-2) !important; }
+.bg-slate-900\/20 { background-color: var(--surface-1) !important; }
+.bg-slate-900 { background-color: var(--surface-2) !important; }
+
+/* Extra fixes for layout stabilization */
+.chat-message pre {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+}
+.chat-message table {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  display: block !important;
+}
+.chat-message p {
+  word-break: break-word !important;
+}
+
+/* ============================================================
+   STATUS BADGES & INDICATORS FOR AGENTS
+   ============================================================ */
+.agent-badge {
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  font-size: 10px !important;
+  letter-spacing: 0.05em;
+  padding: 3px 8px !important;
+  height: auto !important;
+  border-radius: var(--r-sm) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600 !important;
+}
+
+.status-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-active {
+  background-color: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.status-idle {
+  background-color: var(--ink-3);
+  opacity: 0.5;
+}
+
+/* Specific Agent Badge color mappings */
+.badge-secretary {
+  color: var(--color-secretary) !important;
+  background: oklch(from var(--color-secretary) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-secretary) l c h / 0.25) !important;
+}
+
+.badge-writer {
+  color: var(--color-writer) !important;
+  background: oklch(from var(--color-writer) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-writer) l c h / 0.25) !important;
+}
+
+.badge-strategist {
+  color: var(--color-strategist) !important;
+  background: oklch(from var(--color-strategist) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-strategist) l c h / 0.25) !important;
+}
+
+.badge-anthropologist {
+  color: var(--color-anthropologist) !important;
+  background: oklch(from var(--color-anthropologist) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-anthropologist) l c h / 0.25) !important;
+}
+
+.badge-tech {
+  color: var(--color-tech) !important;
+  background: oklch(from var(--color-tech) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-tech) l c h / 0.25) !important;
+}
+

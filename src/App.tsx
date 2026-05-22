@@ -1,0 +1,294 @@
+import { useState, useEffect } from 'react';
+import { Settings, Trash2, Sun, Moon, Users } from 'lucide-react';
+import confetti from 'canvas-confetti';
+import type { Agent, ChatMessage } from './services/coordinator';
+import {
+  INITIAL_AGENTS,
+  loadAgentSystemPrompts,
+  runMultiAgentPipeline
+} from './services/coordinator';
+import { AgentPanel } from './components/AgentPanel';
+import { SettingsModal } from './components/SettingsModal';
+import { EditProfileModal } from './components/EditProfileModal';
+
+const MAX_VISIBLE_SPECIALISTS = 4;
+
+const createAgentRecord = <T,>(agents: Agent[], valueFactory: (agent: Agent) => T): Record<string, T> => (
+  agents.reduce<Record<string, T>>((record, agent) => {
+    record[agent.id] = valueFactory(agent);
+    return record;
+  }, {})
+);
+
+const getCoordinator = (agents: Agent[]) => agents.find(agent => agent.isCoordinator) ?? agents[0];
+
+const getSpecialists = (agents: Agent[]) => {
+  const coordinator = getCoordinator(agents);
+  return agents.filter(agent => agent.id !== coordinator?.id);
+};
+
+const getInitialVisibleAgentIds = (agents: Agent[]) => (
+  getSpecialists(agents).slice(0, MAX_VISIBLE_SPECIALISTS).map(agent => agent.id)
+);
+
+function App() {
+  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
+  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(() => createAgentRecord(INITIAL_AGENTS, () => []));
+  const [thinking, setThinking] = useState<Record<string, boolean>>(() => createAgentRecord(INITIAL_AGENTS, () => false));
+  const [visibleAgentIds, setVisibleAgentIds] = useState<string[]>(() => getInitialVisibleAgentIds(INITIAL_AGENTS));
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  
+  // Settings State (loaded from localStorage)
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [model, setModel] = useState(() => {
+    const saved = localStorage.getItem('gemini_model');
+    const validModels = ['gemini-3.5-flash', 'gemini-3.1-pro', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+    if (saved && validModels.includes(saved)) {
+      return saved;
+    }
+    return 'gemini-3.5-flash';
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+
+  // Vellum Theme State (Light vs Dark)
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
+  // Portrait Editing Modal State
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+
+  // Sync Vellum theme attribute on mount and changes
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+
+  // Load Agent profiles from docs/agents/*.md on mount
+  useEffect(() => {
+    const fetchPrompts = async () => {
+      const loaded = await loadAgentSystemPrompts(INITIAL_AGENTS);
+      
+      // Load saved avatars from localStorage if available
+      const updated = loaded.map(agent => {
+        const savedAvatar = localStorage.getItem(`avatar_${agent.id}`);
+        if (savedAvatar) {
+          return { ...agent, avatar: savedAvatar };
+        }
+        return agent;
+      });
+      
+      setAgents(updated);
+      setMessages(prev => ({ ...createAgentRecord(updated, () => []), ...prev }));
+      setThinking(prev => ({ ...createAgentRecord(updated, () => false), ...prev }));
+      setVisibleAgentIds(prev => {
+        const availableIds = getSpecialists(updated).map(agent => agent.id);
+        const preserved = prev.filter(id => availableIds.includes(id)).slice(0, MAX_VISIBLE_SPECIALISTS);
+        const additions = availableIds.filter(id => !preserved.includes(id)).slice(0, MAX_VISIBLE_SPECIALISTS - preserved.length);
+        return [...preserved, ...additions];
+      });
+    };
+    fetchPrompts();
+  }, []);
+
+  const coordinator = getCoordinator(agents);
+  const specialists = getSpecialists(agents);
+  const visibleAgents = specialists.filter(agent => visibleAgentIds.includes(agent.id));
+
+  const handleToggleVisibleAgent = (agentId: string) => {
+    setVisibleAgentIds(prev => {
+      if (prev.includes(agentId)) {
+        if (prev.length === 1) return prev;
+        return prev.filter(id => id !== agentId);
+      }
+
+      return [...prev.slice(-(MAX_VISIBLE_SPECIALISTS - 1)), agentId];
+    });
+  };
+
+  // Update localStorage when setting values change
+  const handleSaveSettings = (newKey: string, newModel: string) => {
+    setApiKey(newKey);
+    setModel(newModel);
+    localStorage.setItem('gemini_api_key', newKey);
+    localStorage.setItem('gemini_model', newModel);
+    confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
+  };
+
+  // Change individual agent portrait (local upload or link)
+  const handleSavePortrait = (agentId: string, avatarUrl: string) => {
+    if (avatarUrl) {
+      localStorage.setItem(`avatar_${agentId}`, avatarUrl);
+    } else {
+      localStorage.removeItem(`avatar_${agentId}`);
+    }
+    setAgents(prev => prev.map(a => a.id === agentId ? { ...a, avatar: avatarUrl } : a));
+    confetti({ particleCount: 20, spread: 45, origin: { y: 0.8 } });
+  };
+
+  // Handle message sending
+  const handleSendMessage = async (text: string) => {
+    if (isRunning) return;
+    setIsRunning(true);
+    setActiveAgent(coordinator.id);
+
+    // Add user message to coordinator console
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const userMsg: ChatMessage = {
+      id: Math.random().toString(36).substring(2, 9),
+      sender: 'You (User)',
+      role: 'user',
+      text,
+      timestamp
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [coordinator.id]: [...(prev[coordinator.id] || []), userMsg]
+    }));
+
+    // Trigger orchestration pipeline
+    await runMultiAgentPipeline(
+      text,
+      agents,
+      apiKey,
+      model,
+      // onStep callback
+      (agentId, message) => {
+        setMessages(prev => ({
+          ...prev,
+          [agentId]: [...prev[agentId], message]
+        }));
+        // Update active agent to highlight
+        setActiveAgent(agentId);
+      },
+      // onThinking callback
+      (agentId, isThinking) => {
+        setThinking(prev => ({ ...prev, [agentId]: isThinking }));
+      }
+    );
+
+    setActiveAgent(null);
+    setIsRunning(false);
+    
+    // Celebratory confetti upon synthesis completion
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+  };
+
+  const handleClearChats = () => {
+    if (isRunning) return;
+    setMessages(createAgentRecord(agents, () => []));
+    setThinking(createAgentRecord(agents, () => false));
+    setActiveAgent(null);
+  };
+
+  return (
+    <div className="app-container">
+      {/* Main 5 Panel Workspace */}
+      <main className="workspace-grid">
+        {/* Penny - Coordinator Panel (Left Column, Large) */}
+        <div className="left-column">
+          <div className="h-full relative">
+            <AgentPanel
+              agent={coordinator}
+              messages={messages[coordinator.id] || []}
+              isThinking={thinking[coordinator.id] || false}
+              onSendMessage={handleSendMessage}
+              isActive={activeAgent === coordinator.id}
+              isCoordinating={isRunning && !thinking[coordinator.id]}
+              onEditPortrait={() => setEditingAgent(coordinator)}
+            />
+          </div>
+        </div>
+
+        {/* 4 Square Grid (Right Column, 2x2) */}
+        <div className="right-grid">
+          {visibleAgents
+            .map((agent) => (
+              <div key={agent.id} className="h-full relative">
+                <AgentPanel
+                  agent={agent}
+                  messages={messages[agent.id] || []}
+                  isThinking={thinking[agent.id] || false}
+                  isActive={activeAgent === agent.id}
+                  onEditPortrait={() => setEditingAgent(agent)}
+                />
+              </div>
+            ))}
+        </div>
+      </main>
+
+      {/* Footer bar styled using Vellum navbar concept */}
+      <footer className="footer-bar">
+        <div className="badge badge--dot bg-slate-900/40" style={{ height: '28px', padding: '0 12px', borderRadius: 'var(--r-md)' }}>
+          {apiKey ? (
+            <span className="flex items-center gap-1 text-slate-300 font-medium">
+              Gemini Live ({model})
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-slate-500 italic">
+              Local Simulated Mode
+            </span>
+          )}
+        </div>
+
+        <div className="agent-switcher" aria-label="Visible agents">
+          <Users size={14} />
+          {specialists.map(agent => (
+            <button
+              key={agent.id}
+              className={`agent-switcher__button ${agent.badgeClass} ${visibleAgentIds.includes(agent.id) ? 'is-selected' : ''}`}
+              type="button"
+              onClick={() => handleToggleVisibleAgent(agent.id)}
+              title={`${visibleAgentIds.includes(agent.id) ? 'Hide' : 'Show'} ${agent.name}`}
+            >
+              {agent.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="row" style={{ gap: '8px' }}>
+          {/* Theme Toggle */}
+          <button 
+            className="btn btn--secondary btn--icon"
+            style={{ width: '36px', height: '36px' }}
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+
+          <button className="btn btn--secondary btn--sm" onClick={handleClearChats} disabled={isRunning}>
+            <Trash2 size={13} /> Clear Chats
+          </button>
+          <button className="btn btn--secondary btn--sm" onClick={() => setIsSettingsOpen(true)}>
+            <Settings size={13} /> Settings
+          </button>
+        </div>
+      </footer>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        apiKey={apiKey}
+        model={model}
+        onSave={handleSaveSettings}
+      />
+
+      {/* Agent Portrait Upload & URL Editor Modal */}
+      <EditProfileModal
+        isOpen={editingAgent !== null}
+        agent={editingAgent}
+        onClose={() => setEditingAgent(null)}
+        onSave={handleSavePortrait}
+      />
+    </div>
+  );
+}
+
+export default App;
