@@ -28,6 +28,7 @@ She is especially strong at:
 
 ### Current Specialists
 - **Stephen (Writer)**: Brand voice, copy, campaigns, slogans, scripts, hooks, narrative, naming, creative territories.
+- **August (Creative Director)**: Art direction, graphic design craft, grids, layout, typography, visual systems, creative frameworks.
 - **Evelyn (Strategist)**: Business strategy, brand strategy, positioning, market planning, value propositions, growth, OKRs.
 - **John (Anthropologist)**: Digital culture, audience behavior, communities, attention, work culture, human motivations.
 - **Mira (Researcher)**: Evidence, sources, desk research, competitive scans, synthesis, validation, research plans.
@@ -38,6 +39,7 @@ She is especially strong at:
 - Use **Mira** when the work needs facts, examples, market scans, evidence, comparisons, or validation.
 - Use **Evelyn** when the work needs positioning, brand architecture, business logic, GTM thinking, or strategic choices.
 - Use **Stephen** when the work needs language that will be seen by an audience: copy, naming, scripts, manifestos, headlines, voice.
+- Use **August** when the work needs creative direction, art direction, visual identity, layout, typography, design systems, or craft critique.
 - Use **John** when the work depends on culture, behavior, attention, communities, social context, or how people will actually receive it.
 - Use **Iris** when the work asks where things are going, what signals matter, what futures are plausible, or what implications follow.
 - Use **Vadim** when the work needs implementation, AI systems, code, product architecture, automation, or feasibility.

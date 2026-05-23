@@ -1,6 +1,7 @@
 import type { Agent } from '../services/coordinator';
 import secretaryPrompt from '../../docs/agents/secretary.md?raw';
 import writerPrompt from '../../docs/agents/writer.md?raw';
+import creativeDirectorPrompt from '../../docs/agents/creative_director.md?raw';
 import strategistPrompt from '../../docs/agents/strategist.md?raw';
 import anthropologistPrompt from '../../docs/agents/anthropologist.md?raw';
 import techExpertPrompt from '../../docs/agents/tech_expert.md?raw';
@@ -48,6 +49,32 @@ Here are potential angles using the **AIDA** framework:
   * **Hook**: Your virtual team is online. Delegate the busywork.
 
 > Don't write more code to manage your code. Create with The Office and let specialized agents handle the thinking lanes.`
+  },
+  {
+    id: 'creative_director',
+    name: 'August',
+    title: 'Creative Director & Design Systems Lead',
+    role: 'creative_director',
+    avatar: '',
+    color: '#f97316',
+    badgeClass: 'badge-creative-director',
+    activeClass: 'active-creative-director',
+    mdFile: 'docs/agents/creative_director.md',
+    systemPrompt: creativeDirectorPrompt,
+    specialtyKeywords: ['creative direction', 'creative director', 'art direction', 'art director', 'design', 'graphic design', 'grid', 'grids', 'layout', 'typography', 'type', 'visual', 'identity', 'composition', 'craft', 'figma', 'adobe', 'campaign look', 'look and feel', 'design system', 'brand expression', 'poster', 'presentation'],
+    mockAction: 'shape the creative vision and visual system',
+    mockFocus: 'Turn the idea into a creative framework with art direction, grid, typography, layout, and craft guidance.',
+    mockResponse: `### Creative Direction & Visual Framework
+I would turn this into a visual system before polishing surface details.
+
+| Layer | Direction Question | Output |
+| :--- | :--- | :--- |
+| **Idea** | What is the central creative tension? | Creative platform |
+| **System** | What rules make the work recognizable? | Grid, type, color, image logic |
+| **Craft** | What makes it feel intentional? | Hierarchy, spacing, rhythm, restraint |
+| **Expression** | How does it flex across channels? | Campaign and brand applications |
+
+**Provisional read:** Bring creative direction in when the work needs a visual spine, not just nicer execution. Pair with Stephen for language and Evelyn for strategic focus.`
   },
   {
     id: 'strategist',

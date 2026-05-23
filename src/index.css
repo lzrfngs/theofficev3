@@ -8,6 +8,7 @@
 :root {
   --color-secretary: oklch(0.72 0.13 285);     /* Soft Lavender */
   --color-writer: oklch(0.78 0.16 80);         /* Warm Amber */
+  --color-creative-director: oklch(0.72 0.16 55); /* Studio Orange */
   --color-strategist: oklch(0.76 0.14 162);      /* Sage Emerald */
   --color-anthropologist: oklch(0.72 0.15 15);  /* Rose Sand */
   --color-researcher: oklch(0.70 0.14 250);     /* Research Blue */
@@ -17,6 +18,7 @@
   /* Glowing accents */
   --glow-secretary: 0 0 20px oklch(from var(--color-secretary) l c h / 0.20);
   --glow-writer: 0 0 20px oklch(from var(--color-writer) l c h / 0.20);
+  --glow-creative-director: 0 0 20px oklch(from var(--color-creative-director) l c h / 0.20);
   --glow-strategist: 0 0 20px oklch(from var(--color-strategist) l c h / 0.20);
   --glow-anthropologist: 0 0 20px oklch(from var(--color-anthropologist) l c h / 0.20);
   --glow-researcher: 0 0 20px oklch(from var(--color-researcher) l c h / 0.20);
@@ -158,6 +160,10 @@ body {
 .agent-card.active-writer {
   box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-writer);
   border-color: var(--color-writer);
+}
+.agent-card.active-creative-director {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-creative-director);
+  border-color: var(--color-creative-director);
 }
 .agent-card.active-strategist {
   box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-strategist);
@@ -736,6 +742,12 @@ body {
   color: var(--color-writer) !important;
   background: oklch(from var(--color-writer) calc(l - 0.5) c h / 0.12) !important;
   border: 1px solid oklch(from var(--color-writer) l c h / 0.25) !important;
+}
+
+.badge-creative-director {
+  color: var(--color-creative-director) !important;
+  background: oklch(from var(--color-creative-director) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-creative-director) l c h / 0.25) !important;
 }
 
 .badge-strategist {

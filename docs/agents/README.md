@@ -15,6 +15,7 @@ Current agents:
 
 - Penny: coordinator
 - Stephen: writer
+- August: creative director
 - Evelyn: strategist
 - John: anthropologist
 - Mira: researcher
