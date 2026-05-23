@@ -10,6 +10,7 @@
   --color-writer: oklch(0.78 0.16 80);         /* Warm Amber */
   --color-strategist: oklch(0.76 0.14 162);      /* Sage Emerald */
   --color-anthropologist: oklch(0.72 0.15 15);  /* Rose Sand */
+  --color-researcher: oklch(0.70 0.14 250);     /* Research Blue */
   --color-tech: oklch(0.74 0.13 220);          /* Slate Cyan */
 
   /* Glowing accents */
@@ -17,6 +18,7 @@
   --glow-writer: 0 0 20px oklch(from var(--color-writer) l c h / 0.20);
   --glow-strategist: 0 0 20px oklch(from var(--color-strategist) l c h / 0.20);
   --glow-anthropologist: 0 0 20px oklch(from var(--color-anthropologist) l c h / 0.20);
+  --glow-researcher: 0 0 20px oklch(from var(--color-researcher) l c h / 0.20);
   --glow-tech: 0 0 20px oklch(from var(--color-tech) l c h / 0.20);
 }
 
@@ -162,6 +164,10 @@ body {
 .agent-card.active-anthropologist {
   box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-anthropologist);
   border-color: var(--color-anthropologist);
+}
+.agent-card.active-researcher {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-researcher);
+  border-color: var(--color-researcher);
 }
 .agent-card.active-tech {
   box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-tech);
@@ -736,6 +742,12 @@ body {
   color: var(--color-anthropologist) !important;
   background: oklch(from var(--color-anthropologist) calc(l - 0.5) c h / 0.12) !important;
   border: 1px solid oklch(from var(--color-anthropologist) l c h / 0.25) !important;
+}
+
+.badge-researcher {
+  color: var(--color-researcher) !important;
+  background: oklch(from var(--color-researcher) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-researcher) l c h / 0.25) !important;
 }
 
 .badge-tech {

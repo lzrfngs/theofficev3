@@ -10,3 +10,12 @@ To add a future agent:
 4. Add a portrait to `public/portraits` if the agent needs one.
 
 The app imports these markdown files at build time, so they travel with the deployed Vercel build instead of depending on editable runtime files.
+
+Current agents:
+
+- Penny: coordinator
+- Stephen: writer
+- Evelyn: strategist
+- John: anthropologist
+- Mira: researcher
+- Vadim: tech expert

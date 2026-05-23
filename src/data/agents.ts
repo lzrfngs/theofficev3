@@ -4,6 +4,7 @@ import writerPrompt from '../../docs/agents/writer.md?raw';
 import strategistPrompt from '../../docs/agents/strategist.md?raw';
 import anthropologistPrompt from '../../docs/agents/anthropologist.md?raw';
 import techExpertPrompt from '../../docs/agents/tech_expert.md?raw';
+import researcherPrompt from '../../docs/agents/researcher.md?raw';
 
 export const AGENT_CATALOG: Agent[] = [
   {
@@ -92,6 +93,31 @@ The strongest opportunity is trust. Users respond when agent systems feel legibl
 1. **Authenticity matters**: People reject vague automation claims quickly.
 2. **Control reduces anxiety**: Make it obvious which agent is acting and why.
 3. **Recommendation**: Keep the team metaphor visible, but let the user stay in charge of the workflow.`
+  },
+  {
+    id: 'researcher',
+    name: 'Mira',
+    title: 'Research Analyst & Evidence Synthesizer',
+    role: 'researcher',
+    avatar: '',
+    color: '#60a5fa',
+    badgeClass: 'badge-researcher',
+    activeClass: 'active-researcher',
+    mdFile: 'docs/agents/researcher.md',
+    systemPrompt: researcherPrompt,
+    specialtyKeywords: ['research', 'source', 'sources', 'fact', 'facts', 'evidence', 'verify', 'validation', 'compare', 'comparison', 'benchmark', 'examples', 'reference', 'scan', 'discovery', 'background', 'investigate'],
+    mockAction: 'gather evidence and context',
+    mockFocus: 'Clarify what is known, what needs validation, and which findings should guide the team.',
+    mockResponse: `### Research Brief & Evidence Map
+I would frame the investigation around three questions:
+
+| Thread | What to Check | Output |
+| :--- | :--- | :--- |
+| **Context** | Existing examples, comparable products, and terminology | Short landscape summary |
+| **Evidence** | Claims that need sources, benchmarks, or user proof | Confidence-ranked findings |
+| **Gaps** | Unknowns that could change the recommendation | Follow-up research tasks |
+
+**Provisional read:** Bring research in early when the request depends on facts, examples, market context, or comparison. Then hand findings to strategy, writing, or technical agents as needed.`
   },
   {
     id: 'tech_expert',
