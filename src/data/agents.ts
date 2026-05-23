@@ -127,7 +127,7 @@ The strongest opportunity is trust. Users respond when agent systems feel legibl
     name: 'Mira',
     title: 'Research Analyst & Evidence Synthesizer',
     role: 'researcher',
-    avatar: '/portraits/researcher.png',
+    avatar: '/portraits/researcher.jpg',
     color: '#60a5fa',
     badgeClass: 'badge-researcher',
     activeClass: 'active-researcher',
