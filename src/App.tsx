@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, Trash2, Sun, Moon } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import type { Agent, ChatMessage } from './services/coordinator';
+import type { Agent, ChatMessage, ModelProvider } from './services/coordinator';
 import type { WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
 import {
   INITIAL_AGENTS,
@@ -36,13 +36,10 @@ function App() {
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   
   // Settings State (loaded from localStorage)
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [provider, setProvider] = useState<ModelProvider>(() => (localStorage.getItem('model_provider') as ModelProvider | null) || 'gemini');
   const [model, setModel] = useState(() => {
-    const saved = localStorage.getItem('gemini_model');
-    const validModels = ['gemini-3.5-flash', 'gemini-3.1-pro', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
-    if (saved && validModels.includes(saved)) {
-      return saved;
-    }
+    const saved = localStorage.getItem('model_name');
+    if (saved) return saved;
     return 'gemini-3.5-flash';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -86,11 +83,11 @@ function App() {
   const specialists = getSpecialists(agents);
 
   // Update localStorage when setting values change
-  const handleSaveSettings = (newKey: string, newModel: string) => {
-    setApiKey(newKey);
+  const handleSaveSettings = (newProvider: ModelProvider, newModel: string) => {
+    setProvider(newProvider);
     setModel(newModel);
-    localStorage.setItem('gemini_api_key', newKey);
-    localStorage.setItem('gemini_model', newModel);
+    localStorage.setItem('model_provider', newProvider);
+    localStorage.setItem('model_name', newModel);
     confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
   };
 
@@ -128,25 +125,6 @@ function App() {
       [coordinator.id]: [...(prev[coordinator.id] || []), userMsg]
     }));
 
-    if (!apiKey) {
-      const responseMsg: ChatMessage = {
-        id: Math.random().toString(36).substring(2, 9),
-        sender: coordinator.name,
-        role: 'agent',
-        text: 'Connect a Gemini API key in Settings to run the agent workflow.',
-        timestamp
-      };
-
-      setMessages(prev => ({
-        ...prev,
-        [coordinator.id]: [...(prev[coordinator.id] || []), responseMsg]
-      }));
-      setActiveAgent(null);
-      setIsRunning(false);
-      setIsSettingsOpen(true);
-      return;
-    }
-
     const handleWorkflowPlan = (nodes: WorkflowCanvasNode[], edges: WorkflowCanvasEdge[]) => {
       setWorkflowNodes(nodes);
       setWorkflowEdges(edges);
@@ -160,7 +138,7 @@ function App() {
       await runMultiAgentPipeline(
         text,
         agents,
-        apiKey,
+        provider,
         model,
         (agentId, message) => {
           setMessages(prev => ({
@@ -220,15 +198,9 @@ function App() {
       {/* Footer bar styled using Vellum navbar concept */}
       <footer className="footer-bar">
         <div className="badge badge--dot bg-slate-900/40" style={{ height: '28px', padding: '0 12px', borderRadius: 'var(--r-md)' }}>
-          {apiKey ? (
-            <span className="flex items-center gap-1 text-slate-300 font-medium">
-              Gemini Live ({model})
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 text-slate-500 italic">
-              Gemini key required
-            </span>
-          )}
+          <span className="flex items-center gap-1 text-slate-300 font-medium">
+            {provider} / {model}
+          </span>
         </div>
 
         <div className="agent-roster" aria-label="Available specialists">
@@ -261,7 +233,7 @@ function App() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        apiKey={apiKey}
+        provider={provider}
         model={model}
         onSave={handleSaveSettings}
       />

@@ -1,32 +1,34 @@
 import React, { useState } from 'react';
-import { X, Key, Cpu, HelpCircle } from 'lucide-react';
+import { X, Cpu, HelpCircle, Route } from 'lucide-react';
+import type { ModelProvider } from '../services/coordinator';
 
 interface SettingsModalProps {
-  apiKey: string;
+  provider: ModelProvider;
   model: string;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (apiKey: string, model: string) => void;
+  onSave: (provider: ModelProvider, model: string) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
-  apiKey,
+  provider,
   model,
   isOpen,
   onClose,
   onSave
 }) => {
-  const [keyInput, setKeyInput] = useState(apiKey);
+  const [providerSelect, setProviderSelect] = useState<ModelProvider>(provider);
   const [modelSelect, setModelSelect] = useState(model);
-  const [showKey, setShowKey] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(keyInput.trim(), modelSelect);
+    onSave(providerSelect, modelSelect.trim());
     onClose();
   };
+
+  const providerModels = getProviderModels(providerSelect);
 
   return (
     <div className="modal-overlay">
@@ -42,30 +44,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <div className="flex flex-col gap-4 py-2">
-          {/* API Key */}
+          {/* Provider */}
           <div className="form-group">
-            <label className="form-label flex items-center justify-between">
-              <span className="flex items-center gap-1.5"><Key size={13} /> Gemini API Key</span>
-              <button 
-                type="button" 
-                className="text-[10px] text-blue-400 hover:text-blue-300 font-medium"
-                onClick={() => setShowKey(!showKey)}
-              >
-                {showKey ? 'Hide Key' : 'Reveal Key'}
-              </button>
+            <label className="form-label flex items-center gap-1.5">
+              <Route size={13} /> Model Provider
             </label>
-            <input
-              type={showKey ? 'text' : 'password'}
-              className="input"
-              placeholder="Enter Gemini API Key (Optional)..."
-              value={keyInput}
-              onChange={(e) => setKeyInput(e.target.value)}
-            />
-            {!keyInput && (
-              <span className="text-[11px] text-slate-500 italic mt-1">
-                Leave blank to run in simulated mode (fully offline, no API key required).
-              </span>
-            )}
+            <select
+              className="input select cursor-pointer"
+              aria-label="Model provider"
+              title="Model provider"
+              value={providerSelect}
+              onChange={(event) => {
+                const nextProvider = event.target.value as ModelProvider;
+                setProviderSelect(nextProvider);
+                setModelSelect(getProviderModels(nextProvider)[0]);
+              }}
+            >
+              <option value="gemini">Gemini</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="azure-openai">Azure OpenAI</option>
+              <option value="github-models">GitHub Models</option>
+            </select>
           </div>
 
           {/* Model Selection */}
@@ -80,18 +80,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               value={modelSelect}
               onChange={(e) => setModelSelect(e.target.value)}
             >
-              <option value="gemini-3.5-flash">Gemini 3.5 Flash (Fast, Recommended)</option>
-              <option value="gemini-3.1-pro">Gemini 3.1 Pro (Thorough, Analytical)</option>
-              <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (Low Latency)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Stable Legacy)</option>
+              {providerModels.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </select>
+            <input
+              type="text"
+              className="input"
+              aria-label="Custom model name"
+              title="Custom model name"
+              placeholder="Or type a custom deployment/model name..."
+              value={modelSelect}
+              onChange={(event) => setModelSelect(event.target.value)}
+            />
           </div>
 
           <div className="p-3 bg-slate-900/40 border border-slate-800 rounded-lg flex gap-3 text-xs text-slate-400">
             <HelpCircle size={16} className="text-slate-500 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-slate-300 mb-0.5">How it works</p>
-              <p>The office coordinates multi-agent conversations. When you provide an API Key, the main agent Penelope generates dynamic sub-tasks for the experts, calls them using their training instructions, and summarizes their outputs in real time.</p>
+              <p>The office now calls a server-side model router. Put provider keys in Vercel environment variables, then choose the provider and model here.</p>
             </div>
           </div>
         </div>
@@ -108,3 +116,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     </div>
   );
 };
+
+function getProviderModels(provider: ModelProvider) {
+  if (provider === 'gemini') return ['gemini-3.5-flash', 'gemini-3.1-pro', 'gemini-2.5-flash'];
+  if (provider === 'openai') return ['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.2', 'gpt-4.1'];
+  if (provider === 'anthropic') return ['claude-opus-4-6', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5'];
+  if (provider === 'azure-openai') return ['gpt-4.1', 'gpt-5.4', 'gpt-5.4-mini'];
+  return ['openai/gpt-5.4', 'openai/gpt-5.4-mini', 'anthropic/claude-opus-4-6'];
+}

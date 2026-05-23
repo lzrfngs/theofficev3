@@ -6,7 +6,23 @@ A Vite + React multi-agent workspace. Penny coordinates specialist agents, route
 
 The app opens with Penny on the left and an empty workflow canvas on the right. When a user gives Penny a task, Penny plans the right team and the app renders the work as connected nodes. Agents can appear multiple times in a single flow when the work needs to loop back through the same specialist.
 
-Local simulated mode has been removed. A Gemini API key is required for live agent runs until a backend model router is added.
+Local simulated mode has been removed. Live agent runs use the server-side model router in `api/generate.ts`.
+
+## Model Router
+
+The frontend calls `/api/generate`; provider secrets should live in Vercel environment variables, not browser localStorage.
+
+Supported router targets:
+
+- `gemini`
+- `openai`
+- `anthropic`
+- `azure-openai`
+- `github-models`
+
+Copy `.env.example` for local reference and add the matching variables in Vercel Project Settings. The Settings modal controls provider/model selection, but the corresponding server-side key must exist for that provider.
+
+There is also an image-generation foundation at `/api/generate-image`, configured for OpenAI image models such as `gpt-image-2`. This is intended for future real-time thinking portraits and visual agent-state experiments.
 
 ## Agent Profiles
 

@@ -27,6 +27,8 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+export type ModelProvider = 'gemini' | 'openai' | 'anthropic' | 'azure-openai' | 'github-models';
+
 interface DelegationPlanItem {
   agent: string;
   prompt: string;
@@ -75,40 +77,29 @@ export async function loadAgentSystemPrompts(agents: Agent[]): Promise<Agent[]> 
   return loadedAgents;
 }
 
-// Call Gemini API directly using Fetch
-async function callGemini(apiKey: string, systemInstruction: string, prompt: string, model: string = 'gemini-3.5-flash'): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  
-  const response = await fetch(url, {
+async function callModel(provider: ModelProvider, model: string, systemInstruction: string, prompt: string): Promise<string> {
+  const response = await fetch('/api/generate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: systemInstruction }]
-      },
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-      }
+      provider,
+      model,
+      system: systemInstruction,
+      prompt,
+      temperature: 0.7,
+      maxOutputTokens: 2048,
     })
   });
 
+  const data = await response.json();
   if (!response.ok) {
-    const errData = await response.json();
-    throw new Error(errData?.error?.message || `API error (${response.status})`);
+    throw new Error(data?.error || `Model router error (${response.status})`);
   }
 
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini API');
+  const text = data?.text;
+  if (!text) throw new Error('Empty response from model router');
   return text;
 }
 
@@ -116,7 +107,7 @@ async function callGemini(apiKey: string, systemInstruction: string, prompt: str
 export async function runMultiAgentPipeline(
   userQuery: string,
   agents: Agent[],
-  apiKey: string,
+  provider: ModelProvider,
   model: string,
   onStep: (agentId: string, message: ChatMessage) => void,
   onThinking: (agentId: string, isThinking: boolean) => void,
@@ -132,10 +123,6 @@ export async function runMultiAgentPipeline(
   // Helper to generate timestamps
   const getTimestamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const uuid = () => Math.random().toString(36).substring(2, 9);
-
-  if (!apiKey) {
-    throw new Error('A Gemini API key is required to run the agent workflow. Open Settings and add a key.');
-  }
 
   try {
     // --- Step 1: Penny analyzes the request and delegates tasks ---
@@ -174,7 +161,7 @@ Your response MUST be valid JSON in this exact format:
 Do not write markdown formatting (like \`\`\`json) in your raw output, output only the JSON string.
 `;
 
-    const planTextRaw = await callGemini(apiKey, secretary.systemPrompt || '', planningPrompt, model);
+    const planTextRaw = await callModel(provider, model, secretary.systemPrompt || '', planningPrompt);
     onThinking(secretary.id, false);
 
     // Clean JSON wrapper if the LLM outputted code blocks
@@ -225,7 +212,7 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
 
       // Fetch prompt
       try {
-        const subResult = await callGemini(apiKey, targetAgent.systemPrompt || '', delegation.prompt, model);
+        const subResult = await callModel(provider, model, targetAgent.systemPrompt || '', delegation.prompt);
         subAgentResults[targetAgent.name] = subResult;
         
         onStep(targetAgent.id, {
@@ -266,7 +253,7 @@ Based on their findings and your role as Penny (Executive Coordinator), present 
 Keep the tone direct and concise, avoiding excessive conversational filler, fluff, or chatty pleasantries.
 `;
 
-    const finalAnswer = await callGemini(apiKey, secretary.systemPrompt || '', synthesisPrompt, model);
+    const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', synthesisPrompt);
     onThinking(secretary.id, false);
     onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'complete', output: summarizeForNode(finalAnswer) });
 
