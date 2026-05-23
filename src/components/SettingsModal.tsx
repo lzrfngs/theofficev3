@@ -36,7 +36,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <Cpu size={20} className="text-blue-400" />
             Workspace Settings
           </h3>
-          <button type="button" className="btn btn--secondary btn--icon" style={{ width: '32px', height: '32px', padding: 0, borderRadius: '50%' }} onClick={onClose}>
+          <button type="button" className="btn btn--secondary btn--icon" style={{ width: '32px', height: '32px', padding: 0, borderRadius: '50%' }} onClick={onClose} title="Close settings" aria-label="Close settings">
             <X size={16} />
           </button>
         </div>
@@ -75,6 +75,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </label>
             <select
               className="input select cursor-pointer"
+              aria-label="LLM model"
+              title="LLM model"
               value={modelSelect}
               onChange={(e) => setModelSelect(e.target.value)}
             >

@@ -1,4 +1,5 @@
 import { AGENT_CATALOG } from '../data/agents';
+import type { WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from '../types/workflow';
 
 export interface Agent {
   id: string;
@@ -24,6 +25,19 @@ export interface ChatMessage {
   role: 'user' | 'agent' | 'thought';
   text: string;
   timestamp: string;
+}
+
+interface DelegationPlanItem {
+  agent: string;
+  prompt: string;
+  id?: string;
+  label?: string;
+  dependsOn?: string[];
+}
+
+interface PlanningResult {
+  delegations: DelegationPlanItem[];
+  response: string;
 }
 
 export const INITIAL_AGENTS: Agent[] = AGENT_CATALOG;
@@ -105,7 +119,9 @@ export async function runMultiAgentPipeline(
   apiKey: string,
   model: string,
   onStep: (agentId: string, message: ChatMessage) => void,
-  onThinking: (agentId: string, isThinking: boolean) => void
+  onThinking: (agentId: string, isThinking: boolean) => void,
+  onWorkflowPlan?: (nodes: WorkflowCanvasNode[], edges: WorkflowCanvasEdge[]) => void,
+  onWorkflowNodeUpdate?: (nodeId: string, update: WorkflowNodeUpdate) => void
 ): Promise<void> {
   
   // 1. Warm-up and load prompts if they aren't loaded yet
@@ -117,10 +133,8 @@ export async function runMultiAgentPipeline(
   const getTimestamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const uuid = () => Math.random().toString(36).substring(2, 9);
 
-  // If NO API Key is provided, fallback to the smart Local Simulator
   if (!apiKey) {
-    await runMockPipeline(userQuery, activeAgents, onStep, onThinking, getTimestamp, uuid);
-    return;
+    throw new Error('A Gemini API key is required to run the agent workflow. Open Settings and add a key.');
   }
 
   try {
@@ -134,21 +148,25 @@ You are Penny, the Executive Coordinator. The User has sent a request:
 Your task is to:
 1. Coordinate your team of specialists:
 ${specialists.map(agent => `   - ${agent.name} (${agent.role}): ${agent.title}`).join('\n')}
-2. Write a JSON structure indicating which agents you want to consult and what specific prompt to send them. 
+2. Write a JSON structure indicating which workflow steps you want to run, which agent owns each step, what prompt to send, and any dependencies between steps.
 3. EXERCISE WISDOM: Do NOT automatically consult all agents. Selectively consult ONLY the specialist(s) that are relevant to the query (between 1 and 4 agents).
   - If a specialist's title and role are irrelevant, omit that specialist.
   - If the request is pure coding, API design, setup, or systems architecture, prioritize technical agents.
   - If the request is creative writing, branding, advertising, or campaign work, prioritize creative agents.
   - If user research, demographics, culture, or behavior are irrelevant, omit cultural research agents.
   - If business strategy, SWOT, pricing, or OKRs are irrelevant, omit strategy agents.
-4. Provide a very concise status message in the 'response' field outlining your plan to the user. Avoid pleasantries, chit-chat, or filler text. Start directly with the plan, state exactly which agents you are consulting and why (in a short sentence), and end with: "Working with the other agents now..."
+4. You may use the same specialist more than once if the work naturally loops back to them. Each repeated appearance must be a separate delegation with a unique id.
+5. Provide a very concise status message in the 'response' field outlining your plan to the user. Avoid pleasantries, chit-chat, or filler text. Start directly with the plan, state exactly which agents you are consulting and why (in a short sentence), and end with: "Working with the other agents now..."
 
 Your response MUST be valid JSON in this exact format:
 {
   "delegations": [
     {
+      "id": "short_unique_step_id",
       "agent": "${specialists.map(agent => agent.role).join('" | "')}",
-      "prompt": "The detailed instructions you want this agent to execute"
+      "label": "Short node label",
+      "prompt": "The detailed instructions you want this agent to execute",
+      "dependsOn": ["optional_previous_step_id"]
     }
   ],
   "response": "Your status message to the user"
@@ -161,7 +179,7 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
 
     // Clean JSON wrapper if the LLM outputted code blocks
     const cleanJsonText = planTextRaw.replace(/```json/g, '').replace(/```/g, '').trim();
-    let plan: { delegations: Array<{ agent: string; prompt: string }>; response: string };
+    let plan: PlanningResult;
     
     try {
       plan = JSON.parse(cleanJsonText);
@@ -170,13 +188,19 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       plan = {
         delegations: [
           ...specialists.slice(0, 2).map(agent => ({
+            id: `${agent.id}-pass-1`,
             agent: agent.role,
+            label: agent.name,
             prompt: `Analyze this request from your specialty: ${userQuery}`
           }))
         ],
         response: `${secretary.name} here. I'll consult ${specialists.slice(0, 2).map(agent => agent.name).join(' and ')}. Working with the other agents now...`
       };
     }
+
+    const normalizedDelegations = normalizeDelegations(plan.delegations, activeAgents);
+    const workflow = createWorkflowPlan(userQuery, secretary, activeAgents, normalizedDelegations);
+    onWorkflowPlan?.(workflow.nodes, workflow.edges);
 
     // Post Penny's planning message
     onStep(secretary.id, {
@@ -190,10 +214,11 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
     const subAgentResults: Record<string, string> = {};
 
     // --- Step 2: Execute delegations in sequence/parallel ---
-    for (const delegation of plan.delegations) {
+    for (const delegation of normalizedDelegations) {
       const targetAgent = activeAgents.find(a => a.role === delegation.agent || a.id === delegation.agent);
       if (!targetAgent) continue;
 
+      onWorkflowNodeUpdate?.(delegation.id, { status: 'thinking' });
       onThinking(targetAgent.id, true);
       // Wait a simulated bit to give the UI breathing room
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -210,20 +235,26 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
           text: subResult,
           timestamp: getTimestamp()
         });
-      } catch (err: any) {
-        subAgentResults[targetAgent.name] = `Error: ${err.message}`;
+      } catch (err: unknown) {
+        const message = getErrorMessage(err);
+        subAgentResults[targetAgent.name] = `Error: ${message}`;
+        onWorkflowNodeUpdate?.(delegation.id, { status: 'error', output: message });
         onStep(targetAgent.id, {
           id: uuid(),
           sender: targetAgent.name,
           role: 'agent',
-          text: `Apologies, I encountered an issue: ${err.message}`,
+          text: `Apologies, I encountered an issue: ${message}`,
           timestamp: getTimestamp()
         });
+      }
+      if (subAgentResults[targetAgent.name] && !subAgentResults[targetAgent.name].startsWith('Error:')) {
+        onWorkflowNodeUpdate?.(delegation.id, { status: 'complete', output: summarizeForNode(subAgentResults[targetAgent.name]) });
       }
       onThinking(targetAgent.id, false);
     }
 
     // --- Step 3: Penny synthesizes all inputs and responds to the user ---
+    onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'thinking' });
     onThinking(secretary.id, true);
     await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -237,6 +268,7 @@ Keep the tone direct and concise, avoiding excessive conversational filler, fluf
 
     const finalAnswer = await callGemini(apiKey, secretary.systemPrompt || '', synthesisPrompt, model);
     onThinking(secretary.id, false);
+    onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'complete', output: summarizeForNode(finalAnswer) });
 
     onStep(secretary.id, {
       id: uuid(),
@@ -246,112 +278,110 @@ Keep the tone direct and concise, avoiding excessive conversational filler, fluf
       timestamp: getTimestamp()
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = getErrorMessage(err);
     onThinking(secretary.id, false);
     onStep(secretary.id, {
       id: uuid(),
       sender: secretary.name,
       role: 'agent',
-      text: `Oh dear, I ran into a technical error coordinating the team: ${err.message}. Please verify your API Key and network connection in the settings modal.`,
+      text: `Oh dear, I ran into a technical error coordinating the team: ${message}. Please verify your API Key and network connection in the settings modal.`,
       timestamp: getTimestamp()
     });
   }
 }
 
-// Local mock simulation engine (offline mode)
-async function runMockPipeline(
-  query: string,
-  agents: Agent[],
-  onStep: (agentId: string, message: ChatMessage) => void,
-  onThinking: (agentId: string, isThinking: boolean) => void,
-  getTimestamp: () => string,
-  uuid: () => string
-): Promise<void> {
-  const secretary = getCoordinator(agents);
-  const specialists = getSpecialists(agents);
+function normalizeDelegations(delegations: DelegationPlanItem[], agents: Agent[]): Required<DelegationPlanItem>[] {
+  const usedIds = new Set<string>();
 
-  const lowerQuery = query.toLowerCase();
+  return delegations
+    .map((delegation, index) => {
+      const target = agents.find(agent => agent.role === delegation.agent || agent.id === delegation.agent);
+      if (!target) return null;
 
-  const selectedAgents: Array<{ agent: Agent; text: string; action: string }> = [];
+      const baseId = sanitizeId(delegation.id || `${target.id}-${index + 1}`);
+      const id = usedIds.has(baseId) ? `${baseId}-${index + 1}` : baseId;
+      usedIds.add(id);
 
-  specialists.forEach(agent => {
-    const keywords = agent.specialtyKeywords ?? [];
-    const isRelevant = keywords.some(keyword => lowerQuery.includes(keyword.toLowerCase()));
-    if (isRelevant) {
-      selectedAgents.push({
-        agent,
-        text: agent.mockResponse ?? `### ${agent.title}\n${agent.mockFocus ?? `I will analyze **"${query}"** from my specialty and return practical next steps.`}`,
-        action: agent.mockAction ?? `contribute ${agent.title.toLowerCase()} insight`
-      });
+      return {
+        id,
+        agent: target.role,
+        label: delegation.label || `${target.name} pass ${index + 1}`,
+        prompt: delegation.prompt,
+        dependsOn: delegation.dependsOn ?? []
+      };
+    })
+    .filter((delegation): delegation is Required<DelegationPlanItem> => delegation !== null);
+}
+
+function createWorkflowPlan(userQuery: string, manager: Agent, agents: Agent[], delegations: Required<DelegationPlanItem>[]) {
+  const requestNodeId = 'request';
+  const managerNodeId = 'manager';
+  const synthesisNodeId = 'synthesis';
+
+  const nodes: WorkflowCanvasNode[] = [
+    {
+      id: requestNodeId,
+      type: 'request',
+      label: 'User request',
+      status: 'complete',
+      output: userQuery
+    },
+    {
+      id: managerNodeId,
+      type: 'manager',
+      label: manager.name,
+      status: 'complete',
+      agentId: manager.id,
+      output: 'Team assembled'
+    },
+    ...delegations.map(delegation => {
+      const agent = agents.find(item => item.role === delegation.agent || item.id === delegation.agent);
+      return {
+        id: delegation.id,
+        type: 'agent' as const,
+        label: delegation.label,
+        status: 'queued' as const,
+        agentId: agent?.id,
+        prompt: delegation.prompt
+      };
+    }),
+    {
+      id: synthesisNodeId,
+      type: 'synthesis',
+      label: 'Penny synthesis',
+      status: 'queued'
     }
-  });
+  ];
 
-  // Ensure at least one agent is active as fallback
-  if (selectedAgents.length === 0) {
-    selectedAgents.push(
-      ...specialists.slice(0, 2).map(agent => ({
-        agent,
-        text: agent.mockResponse ?? `### ${agent.title}\n${agent.mockFocus ?? `I will analyze **"${query}"** from my specialty and return practical next steps.`}`,
-        action: agent.mockAction ?? `contribute ${agent.title.toLowerCase()} insight`
-      }))
-    );
-  }
+  const edges: WorkflowCanvasEdge[] = [
+    { id: 'request-manager', source: requestNodeId, target: managerNodeId },
+    ...delegations.flatMap(delegation => {
+      if (delegation.dependsOn.length === 0) {
+        return [{ id: `${managerNodeId}-${delegation.id}`, source: managerNodeId, target: delegation.id }];
+      }
 
-  // 1. Penny's Initial Planning Response
-  onThinking(secretary.id, true);
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  onThinking(secretary.id, false);
-  
-  // Build a concise planning response listing only the active agents
-  const agentTasks = selectedAgents.map(sa => `**${sa.agent.name}** to ${sa.action}`).join(', and ');
-  const planningResponse = `Penny here. Let's coordinate. I will task ${agentTasks}. Working with the other agents now...`;
+      return delegation.dependsOn.map(sourceId => ({
+        id: `${sanitizeId(sourceId)}-${delegation.id}`,
+        source: sanitizeId(sourceId),
+        target: delegation.id
+      }));
+    }),
+    ...delegations.map(delegation => ({ id: `${delegation.id}-${synthesisNodeId}`, source: delegation.id, target: synthesisNodeId }))
+  ];
 
-  onStep(secretary.id, {
-    id: uuid(),
-    sender: secretary.name,
-    role: 'agent',
-    text: planningResponse,
-    timestamp: getTimestamp()
-  });
+  return { nodes, edges, synthesisNodeId };
+}
 
-  // Helper to run an agent mock execution
-  const runMockAgent = async (agent: Agent, text: string) => {
-    onThinking(agent.id, true);
-    await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1500));
-    onThinking(agent.id, false);
-    onStep(agent.id, {
-      id: uuid(),
-      sender: agent.name,
-      role: 'agent',
-      text,
-      timestamp: getTimestamp()
-    });
-  };
+function sanitizeId(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'step';
+}
 
-  // Run only the selected agents
-  for (const sa of selectedAgents) {
-    await runMockAgent(sa.agent, sa.text);
-  }
+function summarizeForNode(text: string): string {
+  const cleaned = text.replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim();
+  return cleaned.length > 220 ? `${cleaned.slice(0, 220)}...` : cleaned;
+}
 
-  // 6. Penny Synthesizes
-  onThinking(secretary.id, true);
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  onThinking(secretary.id, false);
-
-  const synthesisReportHeader = `### Penny's Synthesized Project Report\n\nHere is the completed roadmap for **"${query}"**, consolidated from our selected team members' outputs:\n\n`;
-  const synthesisBody = selectedAgents.map((sa, idx) => {
-    let focus = '';
-    focus = sa.agent.mockFocus ?? 'Contributed specialty guidance for the final response.';
-    return `${idx + 1}. **${sa.agent.name} (${sa.agent.title})**: ${focus}`;
-  }).join('\n');
-  const synthesisFooter = `\n\nAll tasks completed. Let me know if you would like me to adjust any specific sections.`;
-  const synthesisText = synthesisReportHeader + synthesisBody + synthesisFooter;
-
-  onStep(secretary.id, {
-    id: uuid(),
-    sender: secretary.name,
-    role: 'agent',
-    text: synthesisText,
-    timestamp: getTimestamp()
-  });
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
 }

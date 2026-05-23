@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Settings, Trash2, Sun, Moon, Users } from 'lucide-react';
+import { Settings, Trash2, Sun, Moon } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Agent, ChatMessage } from './services/coordinator';
+import type { WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
 import {
   INITIAL_AGENTS,
   loadAgentSystemPrompts,
   runMultiAgentPipeline
 } from './services/coordinator';
 import { AgentPanel } from './components/AgentPanel';
+import { WorkflowCanvas } from './components/WorkflowCanvas';
 import { SettingsModal } from './components/SettingsModal';
 import { EditProfileModal } from './components/EditProfileModal';
-
-const MAX_VISIBLE_SPECIALISTS = 4;
 
 const createAgentRecord = <T,>(agents: Agent[], valueFactory: (agent: Agent) => T): Record<string, T> => (
   agents.reduce<Record<string, T>>((record, agent) => {
@@ -27,15 +27,12 @@ const getSpecialists = (agents: Agent[]) => {
   return agents.filter(agent => agent.id !== coordinator?.id);
 };
 
-const getInitialVisibleAgentIds = (agents: Agent[]) => (
-  getSpecialists(agents).slice(0, MAX_VISIBLE_SPECIALISTS).map(agent => agent.id)
-);
-
 function App() {
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(() => createAgentRecord(INITIAL_AGENTS, () => []));
   const [thinking, setThinking] = useState<Record<string, boolean>>(() => createAgentRecord(INITIAL_AGENTS, () => false));
-  const [visibleAgentIds, setVisibleAgentIds] = useState<string[]>(() => getInitialVisibleAgentIds(INITIAL_AGENTS));
+  const [workflowNodes, setWorkflowNodes] = useState<WorkflowCanvasNode[]>([]);
+  const [workflowEdges, setWorkflowEdges] = useState<WorkflowCanvasEdge[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   
   // Settings State (loaded from localStorage)
@@ -81,30 +78,12 @@ function App() {
       setAgents(updated);
       setMessages(prev => ({ ...createAgentRecord(updated, () => []), ...prev }));
       setThinking(prev => ({ ...createAgentRecord(updated, () => false), ...prev }));
-      setVisibleAgentIds(prev => {
-        const availableIds = getSpecialists(updated).map(agent => agent.id);
-        const preserved = prev.filter(id => availableIds.includes(id)).slice(0, MAX_VISIBLE_SPECIALISTS);
-        const additions = availableIds.filter(id => !preserved.includes(id)).slice(0, MAX_VISIBLE_SPECIALISTS - preserved.length);
-        return [...preserved, ...additions];
-      });
     };
     fetchPrompts();
   }, []);
 
   const coordinator = getCoordinator(agents);
   const specialists = getSpecialists(agents);
-  const visibleAgents = specialists.filter(agent => visibleAgentIds.includes(agent.id));
-
-  const handleToggleVisibleAgent = (agentId: string) => {
-    setVisibleAgentIds(prev => {
-      if (prev.includes(agentId)) {
-        if (prev.length === 1) return prev;
-        return prev.filter(id => id !== agentId);
-      }
-
-      return [...prev.slice(-(MAX_VISIBLE_SPECIALISTS - 1)), agentId];
-    });
-  };
 
   // Update localStorage when setting values change
   const handleSaveSettings = (newKey: string, newModel: string) => {
@@ -131,6 +110,8 @@ function App() {
     if (isRunning) return;
     setIsRunning(true);
     setActiveAgent(coordinator.id);
+    setWorkflowNodes([]);
+    setWorkflowEdges([]);
 
     // Add user message to coordinator console
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -147,50 +128,78 @@ function App() {
       [coordinator.id]: [...(prev[coordinator.id] || []), userMsg]
     }));
 
-    // Trigger orchestration pipeline
-    await runMultiAgentPipeline(
-      text,
-      agents,
-      apiKey,
-      model,
-      // onStep callback
-      (agentId, message) => {
-        setMessages(prev => ({
-          ...prev,
-          [agentId]: [...prev[agentId], message]
-        }));
-        // Update active agent to highlight
-        setActiveAgent(agentId);
-      },
-      // onThinking callback
-      (agentId, isThinking) => {
-        setThinking(prev => ({ ...prev, [agentId]: isThinking }));
-      }
-    );
+    if (!apiKey) {
+      const responseMsg: ChatMessage = {
+        id: Math.random().toString(36).substring(2, 9),
+        sender: coordinator.name,
+        role: 'agent',
+        text: 'Connect a Gemini API key in Settings to run the agent workflow.',
+        timestamp
+      };
 
-    setActiveAgent(null);
-    setIsRunning(false);
-    
-    // Celebratory confetti upon synthesis completion
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
+      setMessages(prev => ({
+        ...prev,
+        [coordinator.id]: [...(prev[coordinator.id] || []), responseMsg]
+      }));
+      setActiveAgent(null);
+      setIsRunning(false);
+      setIsSettingsOpen(true);
+      return;
+    }
+
+    const handleWorkflowPlan = (nodes: WorkflowCanvasNode[], edges: WorkflowCanvasEdge[]) => {
+      setWorkflowNodes(nodes);
+      setWorkflowEdges(edges);
+    };
+
+    const handleWorkflowNodeUpdate = (nodeId: string, update: WorkflowNodeUpdate) => {
+      setWorkflowNodes(prev => prev.map(node => node.id === nodeId ? { ...node, ...update } : node));
+    };
+
+    try {
+      await runMultiAgentPipeline(
+        text,
+        agents,
+        apiKey,
+        model,
+        (agentId, message) => {
+          setMessages(prev => ({
+            ...prev,
+            [agentId]: [...(prev[agentId] || []), message]
+          }));
+          setActiveAgent(agentId);
+        },
+        (agentId, isThinking) => {
+          setThinking(prev => ({ ...prev, [agentId]: isThinking }));
+        },
+        handleWorkflowPlan,
+        handleWorkflowNodeUpdate
+      );
+
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    } finally {
+      setActiveAgent(null);
+      setIsRunning(false);
+    }
   };
 
   const handleClearChats = () => {
     if (isRunning) return;
     setMessages(createAgentRecord(agents, () => []));
     setThinking(createAgentRecord(agents, () => false));
+    setWorkflowNodes([]);
+    setWorkflowEdges([]);
     setActiveAgent(null);
   };
 
   return (
     <div className="app-container">
-      {/* Main 5 Panel Workspace */}
+      {/* Main workspace: Penny plus workflow canvas */}
       <main className="workspace-grid">
-        {/* Penny - Coordinator Panel (Left Column, Large) */}
         <div className="left-column">
           <div className="h-full relative">
             <AgentPanel
@@ -205,21 +214,7 @@ function App() {
           </div>
         </div>
 
-        {/* 4 Square Grid (Right Column, 2x2) */}
-        <div className="right-grid">
-          {visibleAgents
-            .map((agent) => (
-              <div key={agent.id} className="h-full relative">
-                <AgentPanel
-                  agent={agent}
-                  messages={messages[agent.id] || []}
-                  isThinking={thinking[agent.id] || false}
-                  isActive={activeAgent === agent.id}
-                  onEditPortrait={() => setEditingAgent(agent)}
-                />
-              </div>
-            ))}
-        </div>
+        <WorkflowCanvas agents={agents} nodes={workflowNodes} edges={workflowEdges} />
       </main>
 
       {/* Footer bar styled using Vellum navbar concept */}
@@ -231,23 +226,14 @@ function App() {
             </span>
           ) : (
             <span className="flex items-center gap-1 text-slate-500 italic">
-              Local Simulated Mode
+              Gemini key required
             </span>
           )}
         </div>
 
-        <div className="agent-switcher" aria-label="Visible agents">
-          <Users size={14} />
+        <div className="agent-roster" aria-label="Available specialists">
           {specialists.map(agent => (
-            <button
-              key={agent.id}
-              className={`agent-switcher__button ${agent.badgeClass} ${visibleAgentIds.includes(agent.id) ? 'is-selected' : ''}`}
-              type="button"
-              onClick={() => handleToggleVisibleAgent(agent.id)}
-              title={`${visibleAgentIds.includes(agent.id) ? 'Hide' : 'Show'} ${agent.name}`}
-            >
-              {agent.name}
-            </button>
+            <span key={agent.id} className={`agent-roster__item ${agent.badgeClass}`}>{agent.name}</span>
           ))}
         </div>
 
@@ -282,6 +268,7 @@ function App() {
 
       {/* Agent Portrait Upload & URL Editor Modal */}
       <EditProfileModal
+        key={editingAgent?.id ?? 'closed'}
         isOpen={editingAgent !== null}
         agent={editingAgent}
         onClose={() => setEditingAgent(null)}

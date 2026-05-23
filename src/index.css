@@ -108,20 +108,199 @@ body {
   min-width: 0;
 }
 
-.right-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
-  gap: var(--space-4);
+.workflow-canvas {
   height: 100%;
-  overflow: hidden;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(var(--line-1) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-1) 1px, transparent 1px),
+    var(--surface-0);
+  background-size: 28px 28px;
+  box-shadow: var(--edge-ring), var(--shadow-sm);
 }
 
-.right-grid > div {
+.workflow-canvas--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workflow-canvas__empty {
+  max-width: 360px;
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--ink-2);
+}
+
+.workflow-canvas__empty-title {
+  font-family: var(--font-serif);
+  font-size: var(--fs-24);
+  color: var(--ink-1);
+  margin-bottom: var(--space-2);
+}
+
+.workflow-canvas__empty-copy {
+  font-size: var(--fs-13);
+  line-height: var(--lh-normal);
+}
+
+.workflow-canvas .react-flow__pane {
+  cursor: grab;
+}
+
+.workflow-canvas .react-flow__pane:active {
+  cursor: grabbing;
+}
+
+.workflow-edge path {
+  stroke: var(--accent) !important;
+  stroke-width: 1.5px;
+}
+
+.workflow-node {
+  --node-accent: var(--accent);
+  width: 260px;
+  padding: var(--space-4);
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklch, var(--node-accent), transparent 62%);
+  background: var(--frost-bg-strong);
+  color: var(--ink-1);
+  box-shadow: var(--edge-top), var(--shadow-md);
+}
+
+.workflow-node.badge-secretary { --node-accent: var(--color-secretary); }
+.workflow-node.badge-writer { --node-accent: var(--color-writer); }
+.workflow-node.badge-creative-director { --node-accent: var(--color-creative-director); }
+.workflow-node.badge-strategist { --node-accent: var(--color-strategist); }
+.workflow-node.badge-anthropologist { --node-accent: var(--color-anthropologist); }
+.workflow-node.badge-researcher { --node-accent: var(--color-researcher); }
+.workflow-node.badge-futurist { --node-accent: var(--color-futurist); }
+.workflow-node.badge-tech { --node-accent: var(--color-tech); }
+
+.workflow-node--thinking {
+  box-shadow: var(--edge-top), 0 0 22px color-mix(in oklch, var(--node-accent), transparent 72%), var(--shadow-md);
+}
+
+.workflow-node--complete {
+  border-color: color-mix(in oklch, var(--success), transparent 45%);
+}
+
+.workflow-node--error {
+  border-color: color-mix(in oklch, var(--danger), transparent 30%);
+}
+
+.workflow-node__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
-  min-height: 0;
+}
+
+.workflow-node__avatar,
+.workflow-node__mark {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-md);
+  flex-shrink: 0;
+}
+
+.workflow-node__avatar {
+  object-fit: cover;
+}
+
+.workflow-node__mark {
+  background: color-mix(in oklch, var(--node-accent), transparent 70%);
+  border: 1px solid color-mix(in oklch, var(--node-accent), transparent 45%);
+}
+
+.workflow-node__title-group {
+  min-width: 0;
+}
+
+.workflow-node__label {
+  font-size: var(--fs-14);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workflow-node__role {
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: var(--fs-11);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workflow-node__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.workflow-node__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--node-accent);
+}
+
+.workflow-node--queued .workflow-node__status-dot {
+  opacity: 0.45;
+}
+
+.workflow-node--complete .workflow-node__status-dot {
+  background: var(--success);
+}
+
+.workflow-node--error .workflow-node__status-dot {
+  background: var(--danger);
+}
+
+.workflow-node__prompt,
+.workflow-node__output {
+  margin: var(--space-3) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-12);
+  line-height: var(--lh-normal);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.workflow-node__output {
+  color: var(--ink-1);
+}
+
+.agent-roster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.agent-roster__item {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
 }
 
 /* Agent Panel styled with Vellum card */

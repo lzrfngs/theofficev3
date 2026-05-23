@@ -1,6 +1,12 @@
 # The Office v3
 
-A Vite + React multi-agent workspace. Penny coordinates specialist agents, routes user requests, and synthesizes the team response.
+A Vite + React multi-agent workspace. Penny coordinates specialist agents, routes user requests, builds a node-based workflow canvas, and synthesizes the team response.
+
+## Workflow Canvas
+
+The app opens with Penny on the left and an empty workflow canvas on the right. When a user gives Penny a task, Penny plans the right team and the app renders the work as connected nodes. Agents can appear multiple times in a single flow when the work needs to loop back through the same specialist.
+
+Local simulated mode has been removed. A Gemini API key is required for live agent runs until a backend model router is added.
 
 ## Agent Profiles
 

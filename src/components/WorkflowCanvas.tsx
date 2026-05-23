@@ -1,0 +1,143 @@
+import React, { useMemo } from 'react';
+import {
+  ReactFlow,
+  Background,
+  BackgroundVariant,
+  Controls,
+  MiniMap,
+  type Edge,
+  type Node,
+  type NodeProps
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import type { Agent } from '../services/coordinator';
+import type { WorkflowCanvasEdge, WorkflowCanvasNode } from '../types/workflow';
+
+interface WorkflowCanvasProps {
+  agents: Agent[];
+  nodes: WorkflowCanvasNode[];
+  edges: WorkflowCanvasEdge[];
+}
+
+const statusLabels: Record<WorkflowCanvasNode['status'], string> = {
+  queued: 'queued',
+  thinking: 'thinking',
+  complete: 'complete',
+  error: 'error'
+};
+
+interface WorkflowNodeData extends Record<string, unknown> {
+  workflowNode: WorkflowCanvasNode;
+  agent?: Agent;
+}
+
+const WorkflowNode: React.FC<NodeProps<Node<WorkflowNodeData>>> = ({ data }) => {
+  const { workflowNode, agent } = data;
+  const isAgent = workflowNode.type === 'agent';
+
+  const agentClass = agent?.badgeClass ?? '';
+
+  return (
+    <div className={`workflow-node ${agentClass} workflow-node--${workflowNode.type} workflow-node--${workflowNode.status}`}>
+      <div className="workflow-node__header">
+        {isAgent && agent?.avatar ? (
+          <img className="workflow-node__avatar" src={agent.avatar} alt="" />
+        ) : (
+          <div className="workflow-node__mark" aria-hidden="true" />
+        )}
+        <div className="workflow-node__title-group">
+          <div className="workflow-node__label">{workflowNode.label}</div>
+          {agent && <div className="workflow-node__role">{agent.title}</div>}
+        </div>
+      </div>
+
+      <div className="workflow-node__status">
+        <span className="workflow-node__status-dot" />
+        {statusLabels[workflowNode.status]}
+      </div>
+
+      {workflowNode.prompt && (
+        <p className="workflow-node__prompt">{workflowNode.prompt}</p>
+      )}
+
+      {workflowNode.output && (
+        <p className="workflow-node__output">{workflowNode.output}</p>
+      )}
+    </div>
+  );
+};
+
+const nodeTypes = {
+  workflow: WorkflowNode
+};
+
+export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edges }) => {
+  const agentMap = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
+
+  const flowNodes = useMemo<Node<WorkflowNodeData>[]>(() => (
+    nodes.map((node, index) => ({
+      id: node.id,
+      type: 'workflow',
+      position: getNodePosition(node, index),
+      data: {
+        workflowNode: node,
+        agent: node.agentId ? agentMap.get(node.agentId) : undefined
+      }
+    }))
+  ), [agentMap, nodes]);
+
+  const flowEdges = useMemo<Edge[]>(() => (
+    edges.map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+      animated: true,
+      className: 'workflow-edge'
+    }))
+  ), [edges]);
+
+  if (nodes.length === 0) {
+    return (
+      <section className="workflow-canvas workflow-canvas--empty" aria-label="Workflow canvas">
+        <div className="workflow-canvas__empty">
+          <div className="workflow-canvas__empty-title">Canvas ready</div>
+          <div className="workflow-canvas__empty-copy">Give Penny a task and she will assemble the right team here.</div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="workflow-canvas" aria-label="Workflow canvas">
+      <ReactFlow
+        nodes={flowNodes}
+        edges={flowEdges}
+        nodeTypes={nodeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.18 }}
+        minZoom={0.35}
+        maxZoom={1.5}
+        nodesDraggable
+        nodesConnectable={false}
+        elementsSelectable
+      >
+        <Background variant={BackgroundVariant.Lines} gap={28} size={1} />
+        <Controls showInteractive={false} />
+        <MiniMap pannable zoomable nodeStrokeWidth={3} />
+      </ReactFlow>
+    </section>
+  );
+};
+
+function getNodePosition(node: WorkflowCanvasNode, index: number) {
+  if (node.type === 'request') return { x: 0, y: 120 };
+  if (node.type === 'manager') return { x: 280, y: 120 };
+  if (node.type === 'synthesis') return { x: 880, y: 120 };
+
+  const agentIndex = Math.max(0, index - 2);
+  return {
+    x: 560,
+    y: 20 + agentIndex * 160
+  };
+}

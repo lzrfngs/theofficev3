@@ -169,6 +169,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                     style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0 }}
                     onClick={onEditPortrait}
                     title="Change Portrait / Local Image"
+                    aria-label="Change portrait or local image"
                   >
                     <Edit size={13} />
                   </button>
@@ -178,6 +179,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                   style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0 }}
                   onClick={() => setShowInspector(!showInspector)}
                   title="Inspect Agent System Prompt"
+                  aria-label="Inspect agent system prompt"
                 >
                   <Eye size={13} />
                 </button>
@@ -219,6 +221,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0 }}
                 onClick={onEditPortrait}
                 title="Change Portrait / Local Image"
+                aria-label="Change portrait or local image"
               >
                 <Edit size={13} />
               </button>
@@ -228,6 +231,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
               style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0 }}
               onClick={() => setShowInspector(!showInspector)}
               title="Inspect Agent System Prompt"
+              aria-label="Inspect agent system prompt"
             >
               <Eye size={13} />
             </button>
@@ -242,7 +246,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
             <h4 className="font-semibold text-slate-200" style={{ color: agent.color }}>
               Training Profile: {agent.name}
             </h4>
-            <button className="inspector-close" onClick={() => setShowInspector(false)}>
+            <button className="inspector-close" onClick={() => setShowInspector(false)} title="Close inspector" aria-label="Close inspector">
               <X size={16} />
             </button>
           </div>
@@ -306,7 +310,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
               onChange={(e) => setInputValue(e.target.value)}
               disabled={isThinking}
             />
-            <button type="submit" className="btn btn--primary btn--icon chat-send-btn" disabled={!inputValue.trim() || isThinking}>
+            <button type="submit" className="btn btn--primary btn--icon chat-send-btn" disabled={!inputValue.trim() || isThinking} title="Send task to Penny" aria-label="Send task to Penny">
               {isThinking ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
             </button>
           </form>

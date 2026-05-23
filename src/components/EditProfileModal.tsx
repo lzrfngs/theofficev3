@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Upload, Link2, Trash2 } from 'lucide-react';
 import type { Agent } from '../services/coordinator';
 
@@ -15,16 +15,8 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   onClose,
   onSave
 }) => {
-  const [avatarInput, setAvatarInput] = useState('');
+  const [avatarInput, setAvatarInput] = useState(() => agent?.avatar || '');
   const [uploadError, setUploadError] = useState('');
-
-  // Sync state when agent changes
-  useEffect(() => {
-    if (agent) {
-      setAvatarInput(agent.avatar || '');
-      setUploadError('');
-    }
-  }, [agent, isOpen]);
 
   if (!isOpen || !agent) return null;
 
@@ -64,7 +56,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
           <h3 className="modal-title flex items-center gap-2 text-white">
             Change Agent Portrait: <span style={{ color: agent.color }}>{agent.name}</span>
           </h3>
-          <button type="button" className="btn btn--secondary" style={{ padding: '4px', borderRadius: '50%', height: '32px', width: '32px' }} onClick={onClose}>
+          <button type="button" className="btn btn--secondary" style={{ padding: '4px', borderRadius: '50%', height: '32px', width: '32px' }} onClick={onClose} title="Close portrait editor" aria-label="Close portrait editor">
             <X size={16} />
           </button>
         </div>
