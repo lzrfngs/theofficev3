@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Send, Eye, X, Loader2, Edit } from 'lucide-react';
 import type { Agent, ChatMessage } from '../services/coordinator';
-import { renderMarkdown } from '../utils/markdown';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface AgentPanelProps {
   agent: Agent;
@@ -169,11 +169,9 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
               <X size={16} />
             </button>
           </div>
-          <div 
-            className="text-xs text-slate-400 overflow-y-auto leading-relaxed select-text markdown-content"
-            style={{ maxHeight: '300px' }}
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(agent.systemPrompt || 'Loading profile instructions...') }}
-          />
+          <div className="text-xs text-slate-400 overflow-y-auto leading-relaxed select-text" style={{ maxHeight: '300px' }}>
+            <MarkdownRenderer text={agent.systemPrompt || 'Loading profile instructions...'} />
+          </div>
         </div>
       )}
 
@@ -195,10 +193,9 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                 <span>{msg.sender}</span>
                 <span className="message-time">{msg.timestamp}</span>
               </div>
-              <div
-                className={`message-bubble ${msg.role === 'thought' ? 'message-thought' : ''} select-text markdown-content`}
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }}
-              />
+              <div className={`message-bubble ${msg.role === 'thought' ? 'message-thought' : ''} select-text`}>
+                <MarkdownRenderer text={msg.text} />
+              </div>
             </div>
           ))}
 
