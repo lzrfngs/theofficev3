@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 type ModelProvider = 'gemini' | 'openai' | 'anthropic' | 'azure-openai' | 'github-models';
 
 interface GenerateRequest {
