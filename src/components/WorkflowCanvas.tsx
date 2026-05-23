@@ -79,6 +79,8 @@ const WorkflowNode: React.FC<NodeProps<Node<WorkflowNodeData>>> = ({ data }) => 
       {workflowNode.output && (
         <p className="workflow-node__output">{workflowNode.output}</p>
       )}
+
+      {workflowNode.manual && <span className="workflow-node__manual">custom</span>}
     </div>
   );
 };

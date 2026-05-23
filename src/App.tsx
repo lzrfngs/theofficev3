@@ -299,6 +299,13 @@ function App() {
     setWorkflowEdges(prev => prev.some(edge => edge.id === edgeId) ? prev : [...prev, { id: edgeId, source, target }]);
   };
 
+  const handleDeleteSelectedNode = () => {
+    if (!selectedNodeId || selectedNodeId === 'request' || selectedNodeId === 'manager' || selectedNodeId === 'synthesis') return;
+    setWorkflowNodes(prev => prev.filter(node => node.id !== selectedNodeId));
+    setWorkflowEdges(prev => prev.filter(edge => edge.source !== selectedNodeId && edge.target !== selectedNodeId));
+    setSelectedNodeId(null);
+  };
+
   const handleNodePositionChange = (nodeId: string, position: { x: number; y: number }) => {
     setWorkflowNodes(prev => prev.map(node => node.id === nodeId ? { ...node, position } : node));
   };
@@ -514,6 +521,10 @@ function App() {
             value={selectedNode.prompt || ''}
             onChange={(event) => handleSelectedNodePromptChange(event.target.value)}
           />
+          <div className="node-editor__actions">
+            <button type="button" className="btn btn--secondary btn--sm" onClick={() => setSelectedNodeId(null)}>Done</button>
+            <button type="button" className="btn btn--danger btn--sm" onClick={handleDeleteSelectedNode}>Delete node</button>
+          </div>
         </div>
       )}
     </div>
