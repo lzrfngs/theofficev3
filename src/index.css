@@ -172,6 +172,15 @@ body {
   color: var(--ink-1);
 }
 
+.workspace-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.workspace-tab--run {
+  color: var(--accent-ink);
+}
+
 .workspace-tab-panel {
   flex: 1;
   min-width: 0;
@@ -637,6 +646,73 @@ button.agent-roster__item {
   color: var(--ink-2);
   font-size: var(--fs-13);
   line-height: 1.5;
+}
+
+.node-editor {
+  position: fixed;
+  right: 24px;
+  bottom: 76px;
+  z-index: 115;
+  width: min(420px, calc(100vw - 48px));
+  padding: var(--space-4);
+  border-radius: var(--r-lg);
+  background: var(--frost-bg-strong);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-xl);
+}
+
+.node-editor__header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.node-editor__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.node-editor__title {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-1);
+  font-size: var(--fs-18);
+}
+
+.node-editor__close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.node-editor__label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--ink-2);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-medium);
+}
+
+.node-editor__textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-1);
+  background: var(--surface-1);
+  color: var(--ink-1);
+  padding: var(--space-3);
+  font: inherit;
+  font-size: var(--fs-13);
+  line-height: 1.45;
 }
 
 /* Agent Panel styled with Vellum card */

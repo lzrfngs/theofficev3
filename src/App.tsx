@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Settings, Trash2, Sun, Moon } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Agent, ChatMessage, ModelProvider } from './services/coordinator';
@@ -6,6 +6,7 @@ import type { WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from 
 import {
   INITIAL_AGENTS,
   loadAgentSystemPrompts,
+  runAuthoredWorkflow,
   runMultiAgentPipeline
 } from './services/coordinator';
 import { AgentPanel } from './components/AgentPanel';
@@ -59,6 +60,8 @@ function App() {
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => (localStorage.getItem(storageKeys.workspaceView) as WorkspaceView | null) || 'canvas');
   const [profileAgentId, setProfileAgentId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const manualNodeCounter = useRef(0);
   
   // Settings State (loaded from localStorage)
   const [provider, setProvider] = useState<ModelProvider>(() => (localStorage.getItem('model_provider') as ModelProvider | null) || 'gemini');
@@ -127,6 +130,7 @@ function App() {
   const coordinator = getCoordinator(agents);
   const specialists = getSpecialists(agents);
   const profileAgent = profileAgentId ? agents.find(agent => agent.id === profileAgentId) : null;
+  const selectedNode = selectedNodeId ? workflowNodes.find(node => node.id === selectedNodeId) : null;
 
   // Update localStorage when setting values change
   const handleSaveSettings = (newProvider: ModelProvider, newModel: string) => {
@@ -231,6 +235,117 @@ function App() {
     setFinalOutputs([]);
     setActiveAgent(null);
     setProfileAgentId(null);
+    setSelectedNodeId(null);
+  };
+
+  const handleAgentDrop = (agentId: string, position: { x: number; y: number }) => {
+    const agent = agents.find(item => item.id === agentId);
+    if (!agent) return;
+
+    const needsScaffold = workflowNodes.length === 0;
+    manualNodeCounter.current += 1;
+    const nodeId = `${agent.id}-${manualNodeCounter.current.toString(36)}`;
+    const requestNode: WorkflowCanvasNode = {
+      id: 'request',
+      type: 'request',
+      label: 'User request',
+      status: 'complete',
+      output: getLatestUserRequest(),
+      position: { x: position.x - 680, y: position.y }
+    };
+    const managerNode: WorkflowCanvasNode = {
+      id: 'manager',
+      type: 'manager',
+      label: coordinator.name,
+      status: 'complete',
+      agentId: coordinator.id,
+      output: 'Authored workflow',
+      position: { x: position.x - 340, y: position.y }
+    };
+    const agentNode: WorkflowCanvasNode = {
+      id: nodeId,
+      type: 'agent',
+      label: agent.name,
+      status: 'queued',
+      agentId: agent.id,
+      prompt: `Contribute your ${agent.title} expertise to this workflow.`,
+      position,
+      manual: true
+    };
+    const synthesisNode: WorkflowCanvasNode = {
+      id: 'synthesis',
+      type: 'synthesis',
+      label: 'Penny synthesis',
+      status: 'queued',
+      position: { x: position.x + 360, y: position.y }
+    };
+
+    setWorkflowNodes(prev => needsScaffold ? [requestNode, managerNode, agentNode, synthesisNode] : [...prev, agentNode]);
+    setWorkflowEdges(prev => {
+      const baseEdges = needsScaffold ? [{ id: 'request-manager', source: 'request', target: 'manager' }] : prev;
+      return [
+        ...baseEdges,
+        { id: `manager-${nodeId}`, source: 'manager', target: nodeId },
+        { id: `${nodeId}-synthesis`, source: nodeId, target: 'synthesis' }
+      ];
+    });
+    setSelectedNodeId(nodeId);
+    setWorkspaceView('canvas');
+  };
+
+  const handleConnectNodes = (source: string, target: string) => {
+    if (source === target) return;
+    const edgeId = `${source}-${target}`;
+    setWorkflowEdges(prev => prev.some(edge => edge.id === edgeId) ? prev : [...prev, { id: edgeId, source, target }]);
+  };
+
+  const handleNodePositionChange = (nodeId: string, position: { x: number; y: number }) => {
+    setWorkflowNodes(prev => prev.map(node => node.id === nodeId ? { ...node, position } : node));
+  };
+
+  const handleSelectedNodePromptChange = (prompt: string) => {
+    if (!selectedNodeId) return;
+    setWorkflowNodes(prev => prev.map(node => node.id === selectedNodeId ? { ...node, prompt } : node));
+  };
+
+  const handleRunAuthoredFlow = async () => {
+    if (isRunning || workflowNodes.filter(node => node.type === 'agent').length === 0) return;
+    setIsRunning(true);
+    setWorkspaceView('canvas');
+    setWorkflowNodes(prev => prev.map(node => node.type === 'agent' || node.type === 'synthesis' ? { ...node, status: 'queued', output: undefined } : node));
+    setWorkflowEdges(prev => prev.map(edge => ({ ...edge, active: false })));
+
+    const requestText = getLatestUserRequest();
+    try {
+      await runAuthoredWorkflow(
+        requestText,
+        agents,
+        provider,
+        model,
+        workflowNodes,
+        workflowEdges,
+        (agentId, message) => {
+          setMessages(prev => ({ ...prev, [agentId]: [...(prev[agentId] || []), message] }));
+          setActiveAgent(agentId);
+        },
+        (agentId, isThinking) => setThinking(prev => ({ ...prev, [agentId]: isThinking })),
+        (nodeId, update) => setWorkflowNodes(prev => prev.map(node => node.id === nodeId ? { ...node, ...update } : node)),
+        (edgeId, update) => setWorkflowEdges(prev => prev.map(edge => edge.id === edgeId ? { ...edge, ...update } : edge)),
+        (message) => {
+          setFinalOutputs(prev => [...prev, message]);
+          setWorkspaceView('output');
+        }
+      );
+      confetti({ particleCount: 60, spread: 65, origin: { y: 0.65 } });
+    } finally {
+      setActiveAgent(null);
+      setIsRunning(false);
+    }
+  };
+
+  const getLatestUserRequest = () => {
+    const latest = [...(messages[coordinator.id] || [])].reverse().find(message => message.role === 'user');
+    return latest?.text || 'Run this authored workflow.';
   };
 
   return (
@@ -271,11 +386,29 @@ function App() {
             >
               Output
             </button>
+            <button
+              className="workspace-tab workspace-tab--run"
+              type="button"
+              onClick={handleRunAuthoredFlow}
+              disabled={isRunning || workflowNodes.filter(node => node.type === 'agent').length === 0}
+              title="Run authored workflow"
+            >
+              Run flow
+            </button>
           </div>
 
           <div className="workspace-tab-panel" role="tabpanel">
             {workspaceView === 'canvas' ? (
-              <WorkflowCanvas agents={agents} nodes={workflowNodes} edges={workflowEdges} />
+              <WorkflowCanvas
+                agents={agents}
+                nodes={workflowNodes}
+                edges={workflowEdges}
+                selectedNodeId={selectedNodeId}
+                onAgentDrop={handleAgentDrop}
+                onConnectNodes={handleConnectNodes}
+                onNodeSelect={setSelectedNodeId}
+                onNodePositionChange={handleNodePositionChange}
+              />
             ) : (
               <OutputPanel coordinator={coordinator} messages={finalOutputs} />
             )}
@@ -299,6 +432,11 @@ function App() {
               type="button"
               title={`${agent.name}: ${agent.title}`}
               aria-label={`Show profile for ${agent.name}`}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData('application/x-agent-id', agent.id);
+                event.dataTransfer.effectAllowed = 'copy';
+              }}
               onClick={() => setProfileAgentId(prev => prev === agent.id ? null : agent.id)}
             >
               <img className="agent-roster__avatar" src={agent.avatar} alt="" />
@@ -357,6 +495,25 @@ function App() {
             <p className="agent-profile-popover__title">{profileAgent.title}</p>
             <p className="agent-profile-popover__approach">{getAgentApproach(profileAgent)}</p>
           </div>
+        </div>
+      )}
+
+      {selectedNode && selectedNode.type === 'agent' && (
+        <div className="node-editor" role="dialog" aria-label="Edit workflow node">
+          <div className="node-editor__header">
+            <div>
+              <div className="node-editor__eyebrow">Workflow step</div>
+              <h2 className="node-editor__title">{selectedNode.label}</h2>
+            </div>
+            <button className="node-editor__close" type="button" onClick={() => setSelectedNodeId(null)} aria-label="Close node editor">×</button>
+          </div>
+          <label className="node-editor__label" htmlFor="node-prompt">Prompt</label>
+          <textarea
+            id="node-prompt"
+            className="node-editor__textarea"
+            value={selectedNode.prompt || ''}
+            onChange={(event) => handleSelectedNodePromptChange(event.target.value)}
+          />
         </div>
       )}
     </div>

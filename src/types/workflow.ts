@@ -9,6 +9,8 @@ export interface WorkflowCanvasNode {
   agentId?: string;
   prompt?: string;
   output?: string;
+  position?: { x: number; y: number };
+  manual?: boolean;
 }
 
 export interface WorkflowCanvasEdge {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   BackgroundVariant,
   Controls,
@@ -8,8 +9,10 @@ import {
   MarkerType,
   MiniMap,
   Position,
+  useReactFlow,
   useEdgesState,
   useNodesState,
+  type Connection,
   type Edge,
   type Node,
   type NodeProps
@@ -22,6 +25,11 @@ interface WorkflowCanvasProps {
   agents: Agent[];
   nodes: WorkflowCanvasNode[];
   edges: WorkflowCanvasEdge[];
+  selectedNodeId?: string | null;
+  onAgentDrop?: (agentId: string, position: { x: number; y: number }) => void;
+  onConnectNodes?: (source: string, target: string) => void;
+  onNodeSelect?: (nodeId: string | null) => void;
+  onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
 }
 
 const statusLabels: Record<WorkflowCanvasNode['status'], string> = {
@@ -79,10 +87,17 @@ const nodeTypes = {
   workflow: WorkflowNode
 };
 
-export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edges }) => {
+export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = (props) => (
+  <ReactFlowProvider>
+    <WorkflowCanvasInner {...props} />
+  </ReactFlowProvider>
+);
+
+const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edges, selectedNodeId, onAgentDrop, onConnectNodes, onNodeSelect, onNodePositionChange }) => {
   const agentMap = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const { screenToFlowPosition } = useReactFlow();
   const isSettled = nodes.length > 0 && nodes.every(node => node.status === 'complete' || node.status === 'error');
 
   useEffect(() => {
@@ -94,7 +109,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
         return {
           id: node.id,
           type: 'workflow',
-          position: previous?.position ?? getNodePosition(node, nodes),
+          selected: node.id === selectedNodeId,
+          position: previous?.position ?? node.position ?? getNodePosition(node, nodes),
           data: {
             workflowNode: node,
             agent: node.agentId ? agentMap.get(node.agentId) : undefined
@@ -102,7 +118,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
         };
       });
     });
-  }, [agentMap, nodes, setFlowNodes]);
+  }, [agentMap, nodes, selectedNodeId, setFlowNodes]);
 
   useEffect(() => {
     setFlowEdges(edges.map(edge => ({
@@ -123,7 +139,17 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
 
   if (nodes.length === 0) {
     return (
-      <section className="workflow-canvas workflow-canvas--empty" aria-label="Workflow canvas">
+      <section
+        className="workflow-canvas workflow-canvas--empty"
+        aria-label="Workflow canvas"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          const agentId = event.dataTransfer.getData('application/x-agent-id');
+          if (!agentId) return;
+          onAgentDrop?.(agentId, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+        }}
+      >
         <div className="workflow-canvas__empty">
           <div className="workflow-canvas__empty-title">Canvas ready</div>
           <div className="workflow-canvas__empty-copy">Give Penny a task and she will assemble the right team here.</div>
@@ -140,12 +166,25 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onConnect={(connection: Connection) => {
+          if (connection.source && connection.target) onConnectNodes?.(connection.source, connection.target);
+        }}
+        onNodeClick={(_, node) => onNodeSelect?.(node.id)}
+        onPaneClick={() => onNodeSelect?.(null)}
+        onNodeDragStop={(_, node) => onNodePositionChange?.(node.id, node.position)}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          const agentId = event.dataTransfer.getData('application/x-agent-id');
+          if (!agentId) return;
+          onAgentDrop?.(agentId, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+        }}
         fitView
         fitViewOptions={{ padding: 0.18 }}
         minZoom={0.35}
         maxZoom={1.5}
         nodesDraggable
-        nodesConnectable={false}
+        nodesConnectable
         elementsSelectable
       >
         <Background variant={BackgroundVariant.Dots} gap={32} size={1.2} color="var(--line-2)" />

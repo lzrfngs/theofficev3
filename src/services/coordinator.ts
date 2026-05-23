@@ -300,6 +300,108 @@ Keep the tone direct and concise, avoiding excessive conversational filler, fluf
   }
 }
 
+export async function runAuthoredWorkflow(
+  userQuery: string,
+  agents: Agent[],
+  provider: ModelProvider,
+  model: string,
+  nodes: WorkflowCanvasNode[],
+  edges: WorkflowCanvasEdge[],
+  onStep: (agentId: string, message: ChatMessage) => void,
+  onThinking: (agentId: string, isThinking: boolean) => void,
+  onWorkflowNodeUpdate: (nodeId: string, update: WorkflowNodeUpdate) => void,
+  onWorkflowEdgeUpdate: (edgeId: string, update: Partial<WorkflowCanvasEdge>) => void,
+  onFinalOutput: (message: ChatMessage) => void
+) {
+  const activeAgents = agents.some(agent => agent.systemPrompt) ? agents : await loadAgentSystemPrompts(agents);
+  const manager = getCoordinator(activeAgents);
+  const agentNodes = sortWorkflowNodes(nodes.filter(node => node.type === 'agent' && node.agentId), edges);
+  const getTimestamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const uuid = () => Math.random().toString(36).substring(2, 9);
+  const nodeOutputs: Record<string, string> = {};
+
+  onStep(manager.id, {
+    id: uuid(),
+    sender: manager.name,
+    role: 'agent',
+    text: `I will run your authored workflow with ${agentNodes.length} specialist step${agentNodes.length === 1 ? '' : 's'}.`,
+    timestamp: getTimestamp()
+  });
+
+  for (const node of agentNodes) {
+    const agent = activeAgents.find(item => item.id === node.agentId);
+    if (!agent) continue;
+
+    const incomingEdges = edges.filter(edge => edge.target === node.id);
+    incomingEdges.forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: true }));
+    onWorkflowNodeUpdate(node.id, { status: 'thinking' });
+    onThinking(agent.id, true);
+
+    const upstreamContext = incomingEdges
+      .map(edge => nodeOutputs[edge.source] ? `Output from ${edge.source}:\n${nodeOutputs[edge.source]}` : '')
+      .filter(Boolean)
+      .join('\n\n');
+
+    const defaultPrompt = `Contribute your ${agent.title} expertise to this workflow.`;
+    const prompt = `${node.prompt || defaultPrompt}\n\nUser request:\n${userQuery}\n\n${upstreamContext ? `Upstream context:\n${upstreamContext}` : ''}`;
+
+    try {
+      const output = await callModel(provider, model, agent.systemPrompt || '', prompt);
+      nodeOutputs[node.id] = output;
+      onWorkflowNodeUpdate(node.id, { status: 'complete', output: summarizeForNode(output) });
+      onStep(agent.id, {
+        id: uuid(),
+        sender: agent.name,
+        role: 'agent',
+        text: output,
+        timestamp: getTimestamp()
+      });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      nodeOutputs[node.id] = `Error: ${message}`;
+      onWorkflowNodeUpdate(node.id, { status: 'error', output: message });
+    } finally {
+      incomingEdges.forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: false }));
+      onThinking(agent.id, false);
+    }
+  }
+
+  const synthesisNode = nodes.find(node => node.type === 'synthesis') ?? {
+    id: 'synthesis',
+    type: 'synthesis' as const,
+    label: 'Penny synthesis',
+    status: 'queued' as const
+  };
+  onWorkflowNodeUpdate(synthesisNode.id, { status: 'thinking' });
+  edges.filter(edge => edge.target === synthesisNode.id).forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: true }));
+  onThinking(manager.id, true);
+
+  const workflowOutputs = Object.entries(nodeOutputs).map(([id, output]) => `\n## ${id}\n${output}`).join('\n');
+  const synthesisPrompt = `Synthesize this authored workflow into a polished final output.\n\nUser request:\n${userQuery}\n\nWorkflow outputs:\n${workflowOutputs}`;
+  const finalAnswer = await callModel(provider, model, manager.systemPrompt || '', synthesisPrompt);
+  onThinking(manager.id, false);
+  onWorkflowNodeUpdate(synthesisNode.id, { status: 'complete', output: summarizeForNode(finalAnswer) });
+  edges.filter(edge => edge.target === synthesisNode.id).forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: false }));
+  onFinalOutput({ id: uuid(), sender: manager.name, role: 'agent', text: finalAnswer, timestamp: getTimestamp() });
+  onStep(manager.id, { id: uuid(), sender: manager.name, role: 'agent', text: 'Output is ready.', timestamp: getTimestamp() });
+}
+
+function sortWorkflowNodes(nodes: WorkflowCanvasNode[], edges: WorkflowCanvasEdge[]) {
+  const sorted: WorkflowCanvasNode[] = [];
+  const remaining = [...nodes];
+  const completed = new Set<string>();
+
+  while (remaining.length > 0) {
+    const nextIndex = remaining.findIndex(node => edges.filter(edge => edge.target === node.id && nodes.some(candidate => candidate.id === edge.source)).every(edge => completed.has(edge.source)));
+    const index = nextIndex === -1 ? 0 : nextIndex;
+    const [next] = remaining.splice(index, 1);
+    sorted.push(next);
+    completed.add(next.id);
+  }
+
+  return sorted;
+}
+
 function normalizeDelegations(delegations: DelegationPlanItem[], agents: Agent[]): Required<DelegationPlanItem>[] {
   const usedIds = new Set<string>();
 
