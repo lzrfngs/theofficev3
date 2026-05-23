@@ -11,6 +11,7 @@
   --color-strategist: oklch(0.76 0.14 162);      /* Sage Emerald */
   --color-anthropologist: oklch(0.72 0.15 15);  /* Rose Sand */
   --color-researcher: oklch(0.70 0.14 250);     /* Research Blue */
+  --color-futurist: oklch(0.72 0.16 315);       /* Foresight Orchid */
   --color-tech: oklch(0.74 0.13 220);          /* Slate Cyan */
 
   /* Glowing accents */
@@ -19,6 +20,7 @@
   --glow-strategist: 0 0 20px oklch(from var(--color-strategist) l c h / 0.20);
   --glow-anthropologist: 0 0 20px oklch(from var(--color-anthropologist) l c h / 0.20);
   --glow-researcher: 0 0 20px oklch(from var(--color-researcher) l c h / 0.20);
+  --glow-futurist: 0 0 20px oklch(from var(--color-futurist) l c h / 0.20);
   --glow-tech: 0 0 20px oklch(from var(--color-tech) l c h / 0.20);
 }
 
@@ -168,6 +170,10 @@ body {
 .agent-card.active-researcher {
   box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-researcher);
   border-color: var(--color-researcher);
+}
+.agent-card.active-futurist {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-futurist);
+  border-color: var(--color-futurist);
 }
 .agent-card.active-tech {
   box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-tech);
@@ -748,6 +754,12 @@ body {
   color: var(--color-researcher) !important;
   background: oklch(from var(--color-researcher) calc(l - 0.5) c h / 0.12) !important;
   border: 1px solid oklch(from var(--color-researcher) l c h / 0.25) !important;
+}
+
+.badge-futurist {
+  color: var(--color-futurist) !important;
+  background: oklch(from var(--color-futurist) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-futurist) l c h / 0.25) !important;
 }
 
 .badge-tech {

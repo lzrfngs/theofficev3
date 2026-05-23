@@ -18,4 +18,5 @@ Current agents:
 - Evelyn: strategist
 - John: anthropologist
 - Mira: researcher
+- Iris: futurist
 - Vadim: tech expert

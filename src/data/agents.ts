@@ -5,6 +5,7 @@ import strategistPrompt from '../../docs/agents/strategist.md?raw';
 import anthropologistPrompt from '../../docs/agents/anthropologist.md?raw';
 import techExpertPrompt from '../../docs/agents/tech_expert.md?raw';
 import researcherPrompt from '../../docs/agents/researcher.md?raw';
+import futuristPrompt from '../../docs/agents/futurist.md?raw';
 
 export const AGENT_CATALOG: Agent[] = [
   {
@@ -118,6 +119,32 @@ I would frame the investigation around three questions:
 | **Gaps** | Unknowns that could change the recommendation | Follow-up research tasks |
 
 **Provisional read:** Bring research in early when the request depends on facts, examples, market context, or comparison. Then hand findings to strategy, writing, or technical agents as needed.`
+  },
+  {
+    id: 'futurist',
+    name: 'Iris',
+    title: 'Strategic Futurist & Scenario Planner',
+    role: 'futurist',
+    avatar: '',
+    color: '#c084fc',
+    badgeClass: 'badge-futurist',
+    activeClass: 'active-futurist',
+    mdFile: 'docs/agents/futurist.md',
+    systemPrompt: futuristPrompt,
+    specialtyKeywords: ['future', 'futures', 'futurist', 'foresight', 'signal', 'signals', 'scenario', 'scenarios', 'horizon', 'trend', 'trends', 'implications', 'plausible', 'forecast', 'forecasting', 'backcast', 'backcasting', 'steep', 'uncertainty', 'uncertainties', 'what if', 'where is this going'],
+    mockAction: 'build a future-facing scenario frame',
+    mockFocus: 'Use signals and foresight frameworks to map plausible futures, tensions, and decision points.',
+    mockResponse: `### Futures Scan & Scenario Frame
+I would treat this as a foresight pass, not a prediction.
+
+| Lens | Question | Output |
+| :--- | :--- | :--- |
+| **Signals** | What early indicators are already visible? | Weak and strong signal map |
+| **Sense-making** | What pattern connects the signals? | Named clusters and tensions |
+| **Scenarios** | What could plausibly unfold? | H1/H2/H3 or 2x2 scenario frame |
+| **Implications** | Who needs to decide what now? | Near-term choices and risks |
+
+**Provisional read:** Bring the futurist in when the work depends on where a market, culture, technology, role, or creative practice may be heading. Pair with Mira when claims need evidence, and Evelyn when the future needs to become strategy.`
   },
   {
     id: 'tech_expert',
