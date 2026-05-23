@@ -90,7 +90,7 @@ async function callGemini(request: Required<GenerateRequest>) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data?.error?.message || `Gemini error ${response.status}`);
+  if (!response.ok) throw new Error(formatProviderError(data, `Gemini error ${response.status}`));
 
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Empty response from Gemini');
@@ -118,7 +118,7 @@ async function callOpenAI(request: Required<GenerateRequest>, endpoint: string, 
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data?.error?.message || `${request.provider} error ${response.status}`);
+  if (!response.ok) throw new Error(formatProviderError(data, `${request.provider} error ${response.status}`));
 
   const text = data?.choices?.[0]?.message?.content;
   if (!text) throw new Error(`Empty response from ${request.provider}`);
@@ -146,7 +146,7 @@ async function callAnthropic(request: Required<GenerateRequest>) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data?.error?.message || `Anthropic error ${response.status}`);
+  if (!response.ok) throw new Error(formatProviderError(data, `Anthropic error ${response.status}`));
 
   const text = data?.content?.map((part: { type: string; text?: string }) => part.type === 'text' ? part.text : '').join('').trim();
   if (!text) throw new Error('Empty response from Anthropic');
@@ -180,7 +180,7 @@ async function callAzureOpenAI(request: Required<GenerateRequest>) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data?.error?.message || `Azure OpenAI error ${response.status}`);
+  if (!response.ok) throw new Error(formatProviderError(data, `Azure OpenAI error ${response.status}`));
 
   const text = data?.choices?.[0]?.message?.content;
   if (!text) throw new Error('Empty response from Azure OpenAI');
@@ -198,4 +198,32 @@ function getDefaultModel(provider: ModelProvider) {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unknown model router error';
+}
+
+function formatProviderError(data: unknown, fallback: string): string {
+  if (!data || typeof data !== 'object') return fallback;
+
+  const error = 'error' in data ? (data as { error?: unknown }).error : data;
+  if (typeof error === 'string') return error;
+  if (!error || typeof error !== 'object') return fallback;
+
+  const record = error as Record<string, unknown>;
+  const message = stringifyErrorField(record.message);
+  const code = stringifyErrorField(record.code);
+  const type = stringifyErrorField(record.type);
+  const param = stringifyErrorField(record.param);
+
+  const parts = [message, code && `code: ${code}`, type && `type: ${type}`, param && `param: ${param}`].filter(Boolean);
+  return parts.length > 0 ? parts.join(' | ') : JSON.stringify(error);
+}
+
+function stringifyErrorField(value: unknown): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
