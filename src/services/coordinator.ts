@@ -272,7 +272,7 @@ Keep the tone direct and concise, avoiding excessive conversational filler, fluf
       id: uuid(),
       sender: secretary.name,
       role: 'agent',
-      text: `Oh dear, I ran into a technical error coordinating the team: ${message}. Please verify your API Key and network connection in the settings modal.`,
+      text: `Oh dear, I ran into a technical error coordinating the team: ${message}. Check that the selected provider has its server-side environment variable configured, then redeploy if you changed Vercel settings.`,
       timestamp: getTimestamp()
     });
   }
