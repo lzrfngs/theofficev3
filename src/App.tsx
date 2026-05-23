@@ -372,8 +372,7 @@ function getAgentApproach(agent: Agent) {
   return source
     .replace(/[-*#`]/g, '')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 360);
+    .trim();
 }
 
 export default App;

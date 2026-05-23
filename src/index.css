@@ -588,6 +588,7 @@ button.agent-roster__item {
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
   box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-xl);
+  max-height: min(420px, calc(100vh - 112px));
 }
 
 .agent-profile-popover__close {
@@ -614,6 +615,7 @@ button.agent-roster__item {
 .agent-profile-popover__content {
   min-width: 0;
   padding-right: var(--space-5);
+  overflow-y: auto;
 }
 
 .agent-profile-popover__eyebrow {
