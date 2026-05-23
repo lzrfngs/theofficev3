@@ -353,7 +353,6 @@ function App() {
           <button className="agent-profile-popover__close" type="button" onClick={() => setProfileAgentId(null)} aria-label="Close agent profile">×</button>
           <img className="agent-profile-popover__portrait" src={profileAgent.avatar} alt="" />
           <div className="agent-profile-popover__content">
-            <div className="agent-profile-popover__eyebrow">{profileAgent.role.replace(/_/g, ' ')}</div>
             <h2 className="agent-profile-popover__name">{profileAgent.name}</h2>
             <p className="agent-profile-popover__title">{profileAgent.title}</p>
             <p className="agent-profile-popover__approach">{getAgentApproach(profileAgent)}</p>
