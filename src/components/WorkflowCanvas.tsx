@@ -112,8 +112,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
         sourceHandle: 'output',
         targetHandle: 'input',
         label: edge.label,
-        animated: !isSettled,
-        className: 'workflow-edge',
+        animated: !!edge.active && !isSettled,
+        className: `workflow-edge ${edge.active ? 'workflow-edge--active' : ''}`,
         markerEnd: {
           type: MarkerType.ArrowClosed
         }
@@ -158,19 +158,20 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
 
 function getNodePosition(node: WorkflowCanvasNode, nodes: WorkflowCanvasNode[]) {
   const agentNodes = nodes.filter(item => item.type === 'agent');
-  const agentColumns = Math.max(1, Math.ceil(agentNodes.length / 4));
-  const centerY = Math.max(180, 70 + Math.min(agentNodes.length, 4) * 105);
+  const rows = Math.min(agentNodes.length, 3);
+  const agentColumns = Math.max(1, Math.ceil(agentNodes.length / 3));
+  const centerY = rows <= 1 ? 180 : 110 + (rows - 1) * 145;
 
   if (node.type === 'request') return { x: 0, y: centerY };
   if (node.type === 'manager') return { x: 320, y: centerY };
   if (node.type === 'synthesis') return { x: 760 + agentColumns * 360, y: centerY };
 
   const agentIndex = Math.max(0, agentNodes.findIndex(item => item.id === node.id));
-  const column = Math.floor(agentIndex / 4);
-  const row = agentIndex % 4;
+  const column = Math.floor(agentIndex / 3);
+  const row = agentIndex % 3;
 
   return {
     x: 680 + column * 360,
-    y: 40 + row * 230
+    y: 40 + row * 290
   };
 }

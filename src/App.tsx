@@ -20,6 +20,7 @@ const storageKeys = {
   messages: 'the_office_messages_v1',
   workflowNodes: 'the_office_workflow_nodes_v1',
   workflowEdges: 'the_office_workflow_edges_v1',
+  finalOutputs: 'the_office_final_outputs_v1',
   workspaceView: 'the_office_workspace_view_v1'
 };
 
@@ -54,6 +55,7 @@ function App() {
   const [thinking, setThinking] = useState<Record<string, boolean>>(() => createAgentRecord(INITIAL_AGENTS, () => false));
   const [workflowNodes, setWorkflowNodes] = useState<WorkflowCanvasNode[]>(() => loadStoredJson(storageKeys.workflowNodes, []));
   const [workflowEdges, setWorkflowEdges] = useState<WorkflowCanvasEdge[]>(() => loadStoredJson(storageKeys.workflowEdges, []));
+  const [finalOutputs, setFinalOutputs] = useState<ChatMessage[]>(() => loadStoredJson(storageKeys.finalOutputs, []));
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => (localStorage.getItem(storageKeys.workspaceView) as WorkspaceView | null) || 'canvas');
   
@@ -90,6 +92,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(storageKeys.workflowEdges, JSON.stringify(workflowEdges));
   }, [workflowEdges]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.finalOutputs, JSON.stringify(finalOutputs));
+  }, [finalOutputs]);
 
   useEffect(() => {
     localStorage.setItem(storageKeys.workspaceView, workspaceView);
@@ -172,6 +178,15 @@ function App() {
       setWorkflowNodes(prev => prev.map(node => node.id === nodeId ? { ...node, ...update } : node));
     };
 
+    const handleWorkflowEdgeUpdate = (edgeId: string, update: Partial<WorkflowCanvasEdge>) => {
+      setWorkflowEdges(prev => prev.map(edge => edge.id === edgeId ? { ...edge, ...update } : edge));
+    };
+
+    const handleFinalOutput = (message: ChatMessage) => {
+      setFinalOutputs(prev => [...prev, message]);
+      setWorkspaceView('output');
+    };
+
     try {
       await runMultiAgentPipeline(
         text,
@@ -189,7 +204,9 @@ function App() {
           setThinking(prev => ({ ...prev, [agentId]: isThinking }));
         },
         handleWorkflowPlan,
-        handleWorkflowNodeUpdate
+        handleWorkflowNodeUpdate,
+        handleWorkflowEdgeUpdate,
+        handleFinalOutput
       );
 
       confetti({
@@ -209,6 +226,7 @@ function App() {
     setThinking(createAgentRecord(agents, () => false));
     setWorkflowNodes([]);
     setWorkflowEdges([]);
+    setFinalOutputs([]);
     setActiveAgent(null);
   };
 
@@ -256,7 +274,7 @@ function App() {
             {workspaceView === 'canvas' ? (
               <WorkflowCanvas agents={agents} nodes={workflowNodes} edges={workflowEdges} />
             ) : (
-              <OutputPanel coordinator={coordinator} messages={messages[coordinator.id] || []} />
+              <OutputPanel coordinator={coordinator} messages={finalOutputs} />
             )}
           </div>
         </section>

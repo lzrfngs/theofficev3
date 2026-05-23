@@ -112,7 +112,9 @@ export async function runMultiAgentPipeline(
   onStep: (agentId: string, message: ChatMessage) => void,
   onThinking: (agentId: string, isThinking: boolean) => void,
   onWorkflowPlan?: (nodes: WorkflowCanvasNode[], edges: WorkflowCanvasEdge[]) => void,
-  onWorkflowNodeUpdate?: (nodeId: string, update: WorkflowNodeUpdate) => void
+  onWorkflowNodeUpdate?: (nodeId: string, update: WorkflowNodeUpdate) => void,
+  onWorkflowEdgeUpdate?: (edgeId: string, update: Partial<WorkflowCanvasEdge>) => void,
+  onFinalOutput?: (message: ChatMessage) => void
 ): Promise<void> {
   
   // 1. Warm-up and load prompts if they aren't loaded yet
@@ -206,6 +208,9 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       if (!targetAgent) continue;
 
       onWorkflowNodeUpdate?.(delegation.id, { status: 'thinking' });
+      workflow.edges
+        .filter(edge => edge.target === delegation.id)
+        .forEach(edge => onWorkflowEdgeUpdate?.(edge.id, { active: true }));
       onThinking(targetAgent.id, true);
       // Wait a simulated bit to give the UI breathing room
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -237,11 +242,17 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       if (subAgentResults[targetAgent.name] && !subAgentResults[targetAgent.name].startsWith('Error:')) {
         onWorkflowNodeUpdate?.(delegation.id, { status: 'complete', output: summarizeForNode(subAgentResults[targetAgent.name]) });
       }
+      workflow.edges
+        .filter(edge => edge.target === delegation.id)
+        .forEach(edge => onWorkflowEdgeUpdate?.(edge.id, { active: false }));
       onThinking(targetAgent.id, false);
     }
 
     // --- Step 3: Penny synthesizes all inputs and responds to the user ---
     onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'thinking' });
+    workflow.edges
+      .filter(edge => edge.target === workflow.synthesisNodeId)
+      .forEach(edge => onWorkflowEdgeUpdate?.(edge.id, { active: true }));
     onThinking(secretary.id, true);
     await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -256,12 +267,23 @@ Keep the tone direct and concise, avoiding excessive conversational filler, fluf
     const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', synthesisPrompt);
     onThinking(secretary.id, false);
     onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'complete', output: summarizeForNode(finalAnswer) });
+    workflow.edges
+      .filter(edge => edge.target === workflow.synthesisNodeId)
+      .forEach(edge => onWorkflowEdgeUpdate?.(edge.id, { active: false }));
+
+    onFinalOutput?.({
+      id: uuid(),
+      sender: secretary.name,
+      role: 'agent',
+      text: finalAnswer,
+      timestamp: getTimestamp()
+    });
 
     onStep(secretary.id, {
       id: uuid(),
       sender: secretary.name,
       role: 'agent',
-      text: finalAnswer,
+      text: 'Output is ready.',
       timestamp: getTimestamp()
     });
 

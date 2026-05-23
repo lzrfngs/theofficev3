@@ -16,6 +16,7 @@ export interface WorkflowCanvasEdge {
   source: string;
   target: string;
   label?: string;
+  active?: boolean;
 }
 
 export type WorkflowNodeUpdate = Partial<Omit<WorkflowCanvasNode, 'id'>>;

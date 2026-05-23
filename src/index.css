@@ -264,6 +264,15 @@ body {
   stroke-width: 2px;
 }
 
+.workflow-edge:not(.workflow-edge--active) path {
+  opacity: 0.42;
+}
+
+.workflow-edge--active path {
+  opacity: 1;
+  stroke-width: 2.5px;
+}
+
 .workflow-edge .react-flow__edge-textbg {
   fill: var(--surface-1);
 }
