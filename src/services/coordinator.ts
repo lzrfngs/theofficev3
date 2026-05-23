@@ -42,6 +42,8 @@ interface PlanningResult {
   response: string;
 }
 
+type NormalizedDelegation = Required<DelegationPlanItem>;
+
 export const INITIAL_AGENTS: Agent[] = AGENT_CATALOG;
 
 function getCoordinator(agents: Agent[]): Agent {
@@ -149,6 +151,8 @@ export async function runMultiAgentPipeline(
   const activeAgents = agents.some(a => a.systemPrompt) ? agents : await loadAgentSystemPrompts(agents);
   const secretary = getCoordinator(activeAgents);
   const specialists = getSpecialists(activeAgents);
+  const preRouting = rankSpecialistsForQuery(userQuery, specialists);
+  const prioritizedSpecialists = preRouting.rankedSpecialists;
   
   // Helper to generate timestamps
   const getTimestamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -164,7 +168,7 @@ You are Penny, the Executive Coordinator. The User has sent a request:
 
 Your task is to:
 1. Coordinate your team of specialists:
-${specialists.map(agent => `   - ${agent.name} (${agent.role}): ${agent.title}`).join('\n')}
+${prioritizedSpecialists.map(agent => `   - ${agent.name} (${agent.role}): ${agent.title}`).join('\n')}
 2. Write a JSON structure indicating which workflow steps you want to run, which agent owns each step, what prompt to send, and any dependencies between steps.
 3. EXERCISE WISDOM: Do NOT automatically consult all agents. Selectively consult ONLY the specialist(s) that are relevant to the query (between 1 and 4 agents).
   - If a specialist's title and role are irrelevant, omit that specialist.
@@ -174,13 +178,15 @@ ${specialists.map(agent => `   - ${agent.name} (${agent.role}): ${agent.title}`)
   - If business strategy, SWOT, pricing, or OKRs are irrelevant, omit strategy agents.
 4. You may use the same specialist more than once if the work naturally loops back to them. Each repeated appearance must be a separate delegation with a unique id.
 5. Provide a very concise status message in the 'response' field outlining your plan to the user. Avoid pleasantries, chit-chat, or filler text. Start directly with the plan, state exactly which agents you are consulting and why (in a short sentence), and end with: "Working with the other agents now..."
+6. Deterministic routing prior from keyword matching (use as a strong prior, not an absolute rule):
+${preRouting.summary}
 
 Your response MUST be valid JSON in this exact format:
 {
   "delegations": [
     {
       "id": "short_unique_step_id",
-      "agent": "${specialists.map(agent => agent.role).join('" | "')}",
+      "agent": "${prioritizedSpecialists.map(agent => agent.role).join('" | "')}",
       "label": "Short node label",
       "prompt": "The detailed instructions you want this agent to execute",
       "dependsOn": ["optional_previous_step_id"]
@@ -204,19 +210,20 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       // Fallback if parsing fails
       plan = {
         delegations: [
-          ...specialists.slice(0, 2).map(agent => ({
+          ...prioritizedSpecialists.slice(0, 2).map(agent => ({
             id: `${agent.id}-pass-1`,
             agent: agent.role,
             label: agent.name,
             prompt: `Analyze this request from your specialty: ${userQuery}`
           }))
         ],
-        response: `${secretary.name} here. I'll consult ${specialists.slice(0, 2).map(agent => agent.name).join(' and ')}. Working with the other agents now...`
+        response: `${secretary.name} here. I'll consult ${prioritizedSpecialists.slice(0, 2).map(agent => agent.name).join(' and ')}. Working with the other agents now...`
       };
     }
 
     const normalizedDelegations = normalizeDelegations(plan.delegations, activeAgents);
-    const workflow = createWorkflowPlan(userQuery, secretary, activeAgents, normalizedDelegations);
+    const resolvedPlan = resolveDelegationDependencies(normalizedDelegations);
+    const workflow = createWorkflowPlan(userQuery, secretary, activeAgents, resolvedPlan.delegations);
     onWorkflowPlan?.(workflow.nodes, workflow.edges);
 
     // Post Penny's planning message
@@ -228,12 +235,32 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       timestamp: getTimestamp()
     });
 
-    const subAgentResults: Record<string, string> = {};
+    if (resolvedPlan.warnings.length > 0) {
+      onStep(secretary.id, {
+        id: uuid(),
+        sender: secretary.name,
+        role: 'agent',
+        text: resolvedPlan.warnings.join(' '),
+        timestamp: getTimestamp()
+      });
+    }
+
+    const subAgentResults: Record<string, { label: string; agentName: string; text: string }> = {};
+    let cumulativeSources = [...existingSources];
 
     // --- Step 2: Execute delegations in sequence/parallel ---
-    for (const delegation of normalizedDelegations) {
+    for (const delegation of resolvedPlan.orderedDelegations) {
       const targetAgent = activeAgents.find(a => a.role === delegation.agent || a.id === delegation.agent);
-      if (!targetAgent) continue;
+      if (!targetAgent) {
+        const errorText = `Error: Unable to resolve specialist for step "${delegation.id}".`;
+        subAgentResults[delegation.id] = {
+          label: delegation.label,
+          agentName: delegation.agent,
+          text: errorText
+        };
+        onWorkflowNodeUpdate?.(delegation.id, { status: 'error', output: errorText });
+        continue;
+      }
 
       onWorkflowNodeUpdate?.(delegation.id, { status: 'thinking' });
       workflow.edges
@@ -245,16 +272,26 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
 
       // Fetch prompt
       try {
-        let runSources = existingSources;
+        let runSources = cumulativeSources;
         if (targetAgent.role === 'researcher') {
           const foundSources = await searchWeb(`${userQuery}\n${delegation.prompt}`, targetAgent.name);
           if (foundSources.length > 0) {
             onSources?.(foundSources);
-            runSources = [...existingSources, ...foundSources];
+            cumulativeSources = [...cumulativeSources, ...foundSources];
+            runSources = cumulativeSources;
           }
         }
-        const subResult = await callModel(provider, model, targetAgent.systemPrompt || '', `${delegation.prompt}${formatSourcesForPrompt(runSources)}`);
-        subAgentResults[targetAgent.name] = subResult;
+        const dependencyContext = delegation.dependsOn
+          .map(depId => subAgentResults[depId] ? `Output from step ${depId} (${subAgentResults[depId].label}, ${subAgentResults[depId].agentName}):\n${subAgentResults[depId].text}` : '')
+          .filter(Boolean)
+          .join('\n\n');
+        const prompt = `${delegation.prompt}${dependencyContext ? `\n\nDependency outputs:\n${dependencyContext}` : ''}${formatSourcesForPrompt(runSources)}`;
+        const subResult = await callModel(provider, model, targetAgent.systemPrompt || '', prompt);
+        subAgentResults[delegation.id] = {
+          label: delegation.label,
+          agentName: targetAgent.name,
+          text: subResult
+        };
         
         onStep(targetAgent.id, {
           id: uuid(),
@@ -265,7 +302,12 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
         });
       } catch (err: unknown) {
         const message = getErrorMessage(err);
-        subAgentResults[targetAgent.name] = `Error: ${message}`;
+        const errorText = `Error: ${message}`;
+        subAgentResults[delegation.id] = {
+          label: delegation.label,
+          agentName: targetAgent.name,
+          text: errorText
+        };
         onWorkflowNodeUpdate?.(delegation.id, { status: 'error', output: message });
         onStep(targetAgent.id, {
           id: uuid(),
@@ -275,8 +317,8 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
           timestamp: getTimestamp()
         });
       }
-      if (subAgentResults[targetAgent.name] && !subAgentResults[targetAgent.name].startsWith('Error:')) {
-        onWorkflowNodeUpdate?.(delegation.id, { status: 'complete', output: summarizeForNode(subAgentResults[targetAgent.name]) });
+      if (subAgentResults[delegation.id] && !subAgentResults[delegation.id].text.startsWith('Error:')) {
+        onWorkflowNodeUpdate?.(delegation.id, { status: 'complete', output: summarizeForNode(subAgentResults[delegation.id].text) });
       }
       workflow.edges
         .filter(edge => edge.target === delegation.id)
@@ -294,13 +336,18 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
 
     const synthesisPrompt = `
 The team has finished their sub-tasks. Here are their reports:
-${Object.entries(subAgentResults).map(([name, text]) => `\n### Response from ${name}:\n${text}`).join('\n')}
+${resolvedPlan.orderedDelegations.map((delegation) => {
+  const result = subAgentResults[delegation.id];
+  const author = result?.agentName ?? delegation.agent;
+  const output = result?.text ?? 'No output captured for this step.';
+  return `\n### Step ${delegation.id} (${delegation.label}) - ${author}:\n${output}`;
+}).join('\n')}
 
 Based on their findings and your role as Penny (Executive Coordinator), present the final compiled solution to the User. Make it professional, beautifully structured with headings/markdown, and highlight which expert provided which insights.
 Keep the tone direct and concise, avoiding excessive conversational filler, fluff, or chatty pleasantries.
 `;
 
-    const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', `${synthesisPrompt}${formatSourcesForPrompt(existingSources)}`, 6144);
+    const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', `${synthesisPrompt}${formatSourcesForPrompt(cumulativeSources)}`, 6144);
     onThinking(secretary.id, false);
     onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'complete', output: summarizeForNode(finalAnswer) });
     workflow.edges
@@ -449,7 +496,7 @@ function sortWorkflowNodes(nodes: WorkflowCanvasNode[], edges: WorkflowCanvasEdg
   return sorted;
 }
 
-function normalizeDelegations(delegations: DelegationPlanItem[], agents: Agent[]): Required<DelegationPlanItem>[] {
+function normalizeDelegations(delegations: DelegationPlanItem[], agents: Agent[]): NormalizedDelegation[] {
   const usedIds = new Set<string>();
 
   return delegations
@@ -466,13 +513,112 @@ function normalizeDelegations(delegations: DelegationPlanItem[], agents: Agent[]
         agent: target.role,
         label: delegation.label || `${target.name} pass ${index + 1}`,
         prompt: delegation.prompt,
-        dependsOn: delegation.dependsOn ?? []
+        dependsOn: (delegation.dependsOn ?? []).map(sanitizeId)
       };
     })
-    .filter((delegation): delegation is Required<DelegationPlanItem> => delegation !== null);
+    .filter((delegation): delegation is NormalizedDelegation => delegation !== null);
 }
 
-function createWorkflowPlan(userQuery: string, manager: Agent, agents: Agent[], delegations: Required<DelegationPlanItem>[]) {
+function resolveDelegationDependencies(delegations: NormalizedDelegation[]) {
+  const validIds = new Set(delegations.map(delegation => delegation.id));
+  const warnings: string[] = [];
+  const dependencies = new Map<string, Set<string>>();
+
+  for (const delegation of delegations) {
+    const filteredDependencies = new Set<string>();
+    for (const dependencyId of delegation.dependsOn) {
+      if (dependencyId === delegation.id) {
+        warnings.push(`Ignored self-dependency on step "${delegation.id}".`);
+        continue;
+      }
+      if (!validIds.has(dependencyId)) {
+        warnings.push(`Ignored unknown dependency "${dependencyId}" referenced by step "${delegation.id}".`);
+        continue;
+      }
+      filteredDependencies.add(dependencyId);
+    }
+    dependencies.set(delegation.id, filteredDependencies);
+  }
+
+  const scheduled = new Set<string>();
+  const orderedIds: string[] = [];
+
+  while (orderedIds.length < delegations.length) {
+    const ready = delegations.filter(delegation => !scheduled.has(delegation.id) && [...(dependencies.get(delegation.id) ?? [])].every(depId => scheduled.has(depId)));
+    if (ready.length > 0) {
+      for (const delegation of ready) {
+        scheduled.add(delegation.id);
+        orderedIds.push(delegation.id);
+      }
+      continue;
+    }
+
+    const blocked = delegations.find(delegation => !scheduled.has(delegation.id));
+    if (!blocked) break;
+    const blockedDependencies = dependencies.get(blocked.id);
+    const dependencyToDrop = blockedDependencies ? [...blockedDependencies].find(depId => !scheduled.has(depId)) : undefined;
+    if (dependencyToDrop && blockedDependencies) {
+      blockedDependencies.delete(dependencyToDrop);
+      warnings.push(`Detected cyclic dependency. Proceeding by dropping "${dependencyToDrop}" from "${blocked.id}".`);
+      continue;
+    }
+
+    scheduled.add(blocked.id);
+    orderedIds.push(blocked.id);
+  }
+
+  const delegationById = new Map(delegations.map(delegation => [delegation.id, delegation]));
+  const resolvedDelegations = delegations.map(delegation => ({
+    ...delegation,
+    dependsOn: [...(dependencies.get(delegation.id) ?? [])]
+  }));
+  const orderedDelegations = orderedIds
+    .map(id => delegationById.get(id))
+    .filter((delegation): delegation is NormalizedDelegation => Boolean(delegation))
+    .map(delegation => ({
+      ...delegation,
+      dependsOn: [...(dependencies.get(delegation.id) ?? [])]
+    }));
+
+  return {
+    delegations: resolvedDelegations,
+    orderedDelegations,
+    warnings
+  };
+}
+
+function rankSpecialistsForQuery(userQuery: string, specialists: Agent[]) {
+  const normalizedQuery = userQuery.toLowerCase();
+  const scoredSpecialists = specialists.map((specialist, index) => {
+    const keywords = specialist.specialtyKeywords ?? [];
+    const matchedKeywords = keywords
+      .map(keyword => keyword.trim().toLowerCase())
+      .filter(keyword => keyword.length > 0 && normalizedQuery.includes(keyword));
+
+    return {
+      specialist,
+      matchedKeywords,
+      score: matchedKeywords.length,
+      index
+    };
+  });
+
+  const rankedSpecialists = [...scoredSpecialists]
+    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
+    .map(item => item.specialist);
+
+  const summary = scoredSpecialists
+    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
+    .map(item => {
+      if (item.score === 0) return `- ${item.specialist.name}: no keyword match`;
+      return `- ${item.specialist.name}: ${item.score} match(es) (${item.matchedKeywords.slice(0, 4).join(', ')})`;
+    })
+    .join('\n');
+
+  return { rankedSpecialists, summary };
+}
+
+function createWorkflowPlan(userQuery: string, manager: Agent, agents: Agent[], delegations: NormalizedDelegation[]) {
   const requestNodeId = 'request';
   const managerNodeId = 'manager';
   const synthesisNodeId = 'synthesis';
