@@ -83,6 +83,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
   const agentMap = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const isSettled = nodes.length > 0 && nodes.every(node => node.status === 'complete' || node.status === 'error');
 
   useEffect(() => {
     setFlowNodes(previousNodes => {
@@ -111,14 +112,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
         sourceHandle: 'output',
         targetHandle: 'input',
         label: edge.label,
-        animated: true,
+        animated: !isSettled,
         className: 'workflow-edge',
         markerEnd: {
           type: MarkerType.ArrowClosed
         }
       }))
     );
-  }, [edges, setFlowEdges]);
+  }, [edges, isSettled, setFlowEdges]);
 
   if (nodes.length === 0) {
     return (

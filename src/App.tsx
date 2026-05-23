@@ -10,8 +10,18 @@ import {
 } from './services/coordinator';
 import { AgentPanel } from './components/AgentPanel';
 import { WorkflowCanvas } from './components/WorkflowCanvas';
+import { OutputPanel } from './components/OutputPanel';
 import { SettingsModal } from './components/SettingsModal';
 import { EditProfileModal } from './components/EditProfileModal';
+
+type WorkspaceView = 'canvas' | 'output';
+
+const storageKeys = {
+  messages: 'the_office_messages_v1',
+  workflowNodes: 'the_office_workflow_nodes_v1',
+  workflowEdges: 'the_office_workflow_edges_v1',
+  workspaceView: 'the_office_workspace_view_v1'
+};
 
 const createAgentRecord = <T,>(agents: Agent[], valueFactory: (agent: Agent) => T): Record<string, T> => (
   agents.reduce<Record<string, T>>((record, agent) => {
@@ -27,13 +37,25 @@ const getSpecialists = (agents: Agent[]) => {
   return agents.filter(agent => agent.id !== coordinator?.id);
 };
 
+const loadStoredJson = <T,>(key: string, fallback: T): T => {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) as T : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 function App() {
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
-  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(() => createAgentRecord(INITIAL_AGENTS, () => []));
+  const [messages, setMessages] = useState<Record<string, ChatMessage[]>>(() => (
+    loadStoredJson(storageKeys.messages, createAgentRecord(INITIAL_AGENTS, () => []))
+  ));
   const [thinking, setThinking] = useState<Record<string, boolean>>(() => createAgentRecord(INITIAL_AGENTS, () => false));
-  const [workflowNodes, setWorkflowNodes] = useState<WorkflowCanvasNode[]>([]);
-  const [workflowEdges, setWorkflowEdges] = useState<WorkflowCanvasEdge[]>([]);
+  const [workflowNodes, setWorkflowNodes] = useState<WorkflowCanvasNode[]>(() => loadStoredJson(storageKeys.workflowNodes, []));
+  const [workflowEdges, setWorkflowEdges] = useState<WorkflowCanvasEdge[]>(() => loadStoredJson(storageKeys.workflowEdges, []));
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => (localStorage.getItem(storageKeys.workspaceView) as WorkspaceView | null) || 'canvas');
   
   // Settings State (loaded from localStorage)
   const [provider, setProvider] = useState<ModelProvider>(() => (localStorage.getItem('model_provider') as ModelProvider | null) || 'gemini');
@@ -56,6 +78,22 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.messages, JSON.stringify(messages));
+  }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.workflowNodes, JSON.stringify(workflowNodes));
+  }, [workflowNodes]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.workflowEdges, JSON.stringify(workflowEdges));
+  }, [workflowEdges]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.workspaceView, workspaceView);
+  }, [workspaceView]);
 
 
   // Load Agent profiles from docs/agents/*.md on mount
@@ -192,7 +230,36 @@ function App() {
           </div>
         </div>
 
-        <WorkflowCanvas agents={agents} nodes={workflowNodes} edges={workflowEdges} />
+        <section className="workspace-panel" aria-label="Workflow and output workspace">
+          <div className="workspace-tabs" role="tablist" aria-label="Workspace views">
+            <button
+              className={`workspace-tab ${workspaceView === 'canvas' ? 'is-active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={workspaceView === 'canvas'}
+              onClick={() => setWorkspaceView('canvas')}
+            >
+              Canvas
+            </button>
+            <button
+              className={`workspace-tab ${workspaceView === 'output' ? 'is-active' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={workspaceView === 'output'}
+              onClick={() => setWorkspaceView('output')}
+            >
+              Output
+            </button>
+          </div>
+
+          <div className="workspace-tab-panel" role="tabpanel">
+            {workspaceView === 'canvas' ? (
+              <WorkflowCanvas agents={agents} nodes={workflowNodes} edges={workflowEdges} />
+            ) : (
+              <OutputPanel coordinator={coordinator} messages={messages[coordinator.id] || []} />
+            )}
+          </div>
+        </section>
       </main>
 
       {/* Footer bar styled using Vellum navbar concept */}
@@ -205,7 +272,13 @@ function App() {
 
         <div className="agent-roster" aria-label="Available specialists">
           {specialists.map(agent => (
-            <span key={agent.id} className={`agent-roster__item ${agent.badgeClass}`}>{agent.name}</span>
+            <span key={agent.id} className={`agent-roster__item ${agent.badgeClass}`} title={`${agent.name}: ${agent.title}`}>
+              <img className="agent-roster__avatar" src={agent.avatar} alt="" />
+              <span className="agent-roster__text">
+                <span className="agent-roster__name">{agent.name}</span>
+                <span className="agent-roster__title">{agent.title}</span>
+              </span>
+            </span>
           ))}
         </div>
 
