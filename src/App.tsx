@@ -157,10 +157,9 @@ function App() {
   // Handle message sending
   const handleSendMessage = async (text: string) => {
     if (isRunning) return;
+    const hasAuthoredFlow = workflowNodes.some(node => node.type === 'agent');
     setIsRunning(true);
     setActiveAgent(coordinator.id);
-    setWorkflowNodes([]);
-    setWorkflowEdges([]);
 
     // Add user message to coordinator console
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -196,26 +195,48 @@ function App() {
     };
 
     try {
-      await runMultiAgentPipeline(
-        text,
-        agents,
-        provider,
-        model,
-        (agentId, message) => {
-          setMessages(prev => ({
-            ...prev,
-            [agentId]: [...(prev[agentId] || []), message]
-          }));
-          setActiveAgent(agentId);
-        },
-        (agentId, isThinking) => {
-          setThinking(prev => ({ ...prev, [agentId]: isThinking }));
-        },
-        handleWorkflowPlan,
-        handleWorkflowNodeUpdate,
-        handleWorkflowEdgeUpdate,
-        handleFinalOutput
-      );
+      if (hasAuthoredFlow) {
+        setWorkflowNodes(prev => prev.map(node => node.id === 'request' ? { ...node, output: text } : node));
+        await runAuthoredWorkflow(
+          text,
+          agents,
+          provider,
+          model,
+          workflowNodes.map(node => node.id === 'request' ? { ...node, output: text } : node),
+          workflowEdges,
+          (agentId, message) => {
+            setMessages(prev => ({ ...prev, [agentId]: [...(prev[agentId] || []), message] }));
+            setActiveAgent(agentId);
+          },
+          (agentId, isThinking) => setThinking(prev => ({ ...prev, [agentId]: isThinking })),
+          handleWorkflowNodeUpdate,
+          handleWorkflowEdgeUpdate,
+          handleFinalOutput
+        );
+      } else {
+        setWorkflowNodes([]);
+        setWorkflowEdges([]);
+        await runMultiAgentPipeline(
+          text,
+          agents,
+          provider,
+          model,
+          (agentId, message) => {
+            setMessages(prev => ({
+              ...prev,
+              [agentId]: [...(prev[agentId] || []), message]
+            }));
+            setActiveAgent(agentId);
+          },
+          (agentId, isThinking) => {
+            setThinking(prev => ({ ...prev, [agentId]: isThinking }));
+          },
+          handleWorkflowPlan,
+          handleWorkflowNodeUpdate,
+          handleWorkflowEdgeUpdate,
+          handleFinalOutput
+        );
+      }
 
       confetti({
         particleCount: 80,
