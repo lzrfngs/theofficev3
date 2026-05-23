@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
@@ -8,6 +8,8 @@ import {
   MarkerType,
   MiniMap,
   Position,
+  useEdgesState,
+  useNodesState,
   type Edge,
   type Node,
   type NodeProps
@@ -79,34 +81,44 @@ const nodeTypes = {
 
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edges }) => {
   const agentMap = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>([]);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const flowNodes = useMemo<Node<WorkflowNodeData>[]>(() => (
-    nodes.map((node) => ({
-      id: node.id,
-      type: 'workflow',
-      position: getNodePosition(node, nodes),
-      data: {
-        workflowNode: node,
-        agent: node.agentId ? agentMap.get(node.agentId) : undefined
-      }
-    }))
-  ), [agentMap, nodes]);
+  useEffect(() => {
+    setFlowNodes(previousNodes => {
+      const previousById = new Map(previousNodes.map(node => [node.id, node]));
 
-  const flowEdges = useMemo<Edge[]>(() => (
-    edges.map(edge => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      sourceHandle: 'output',
-      targetHandle: 'input',
-      label: edge.label,
-      animated: true,
-      className: 'workflow-edge',
-      markerEnd: {
-        type: MarkerType.ArrowClosed
-      }
-    }))
-  ), [edges]);
+      return nodes.map((node) => {
+        const previous = previousById.get(node.id);
+        return {
+          id: node.id,
+          type: 'workflow',
+          position: previous?.position ?? getNodePosition(node, nodes),
+          data: {
+            workflowNode: node,
+            agent: node.agentId ? agentMap.get(node.agentId) : undefined
+          }
+        };
+      });
+    });
+  }, [agentMap, nodes, setFlowNodes]);
+
+  useEffect(() => {
+    setFlowEdges(edges.map(edge => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: 'output',
+        targetHandle: 'input',
+        label: edge.label,
+        animated: true,
+        className: 'workflow-edge',
+        markerEnd: {
+          type: MarkerType.ArrowClosed
+        }
+      }))
+    );
+  }, [edges, setFlowEdges]);
 
   if (nodes.length === 0) {
     return (
@@ -125,6 +137,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         fitView
         fitViewOptions={{ padding: 0.18 }}
         minZoom={0.35}
@@ -133,7 +147,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
         nodesConnectable={false}
         elementsSelectable
       >
-        <Background variant={BackgroundVariant.Lines} gap={28} size={1} />
+        <Background variant={BackgroundVariant.Dots} gap={32} size={1.2} color="var(--line-2)" />
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable nodeStrokeWidth={3} bgColor="var(--surface-1)" maskColor="oklch(0 0 0 / 0.18)" />
       </ReactFlow>
