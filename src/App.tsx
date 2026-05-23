@@ -61,6 +61,7 @@ function App() {
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => (localStorage.getItem(storageKeys.workspaceView) as WorkspaceView | null) || 'canvas');
   const [profileAgentId, setProfileAgentId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const manualNodeCounter = useRef(0);
   
   // Settings State (loaded from localStorage)
@@ -131,6 +132,7 @@ function App() {
   const specialists = getSpecialists(agents);
   const profileAgent = profileAgentId ? agents.find(agent => agent.id === profileAgentId) : null;
   const selectedNode = selectedNodeId ? workflowNodes.find(node => node.id === selectedNodeId) : null;
+  const selectedEdge = selectedEdgeId ? workflowEdges.find(edge => edge.id === selectedEdgeId) : null;
 
   // Update localStorage when setting values change
   const handleSaveSettings = (newProvider: ModelProvider, newModel: string) => {
@@ -236,6 +238,12 @@ function App() {
     setActiveAgent(null);
     setProfileAgentId(null);
     setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  };
+
+  const createManualNodeId = (agentId: string) => {
+    manualNodeCounter.current += 1;
+    return `${agentId}-${manualNodeCounter.current.toString(36)}`;
   };
 
   const handleAgentDrop = (agentId: string, position: { x: number; y: number }) => {
@@ -243,8 +251,7 @@ function App() {
     if (!agent) return;
 
     const needsScaffold = workflowNodes.length === 0;
-    manualNodeCounter.current += 1;
-    const nodeId = `${agent.id}-${manualNodeCounter.current.toString(36)}`;
+    const nodeId = createManualNodeId(agent.id);
     const requestNode: WorkflowCanvasNode = {
       id: 'request',
       type: 'request',
@@ -290,6 +297,7 @@ function App() {
       ];
     });
     setSelectedNodeId(nodeId);
+    setSelectedEdgeId(null);
     setWorkspaceView('canvas');
   };
 
@@ -299,11 +307,53 @@ function App() {
     setWorkflowEdges(prev => prev.some(edge => edge.id === edgeId) ? prev : [...prev, { id: edgeId, source, target }]);
   };
 
+  const handleSelectNode = (nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+    if (nodeId) setSelectedEdgeId(null);
+  };
+
+  const handleSelectEdge = (edgeId: string | null) => {
+    setSelectedEdgeId(edgeId);
+    if (edgeId) setSelectedNodeId(null);
+  };
+
   const handleDeleteSelectedNode = () => {
     if (!selectedNodeId || selectedNodeId === 'request' || selectedNodeId === 'manager' || selectedNodeId === 'synthesis') return;
     setWorkflowNodes(prev => prev.filter(node => node.id !== selectedNodeId));
     setWorkflowEdges(prev => prev.filter(edge => edge.source !== selectedNodeId && edge.target !== selectedNodeId));
     setSelectedNodeId(null);
+  };
+
+  const handleDuplicateSelectedNode = () => {
+    if (!selectedNode || selectedNode.type !== 'agent' || !selectedNode.agentId) return;
+    const nodeId = createManualNodeId(selectedNode.agentId);
+    const duplicate: WorkflowCanvasNode = {
+      ...selectedNode,
+      id: nodeId,
+      label: `${selectedNode.label} copy`,
+      status: 'queued',
+      output: undefined,
+      manual: true,
+      position: {
+        x: (selectedNode.position?.x ?? 680) + 36,
+        y: (selectedNode.position?.y ?? 80) + 36
+      }
+    };
+
+    setWorkflowNodes(prev => [...prev, duplicate]);
+    setWorkflowEdges(prev => [
+      ...prev,
+      { id: `manager-${nodeId}`, source: 'manager', target: nodeId },
+      { id: `${nodeId}-synthesis`, source: nodeId, target: 'synthesis' }
+    ]);
+    setSelectedNodeId(nodeId);
+    setSelectedEdgeId(null);
+  };
+
+  const handleDeleteSelectedEdge = () => {
+    if (!selectedEdgeId || selectedEdgeId === 'request-manager') return;
+    setWorkflowEdges(prev => prev.filter(edge => edge.id !== selectedEdgeId));
+    setSelectedEdgeId(null);
   };
 
   const handleNodePositionChange = (nodeId: string, position: { x: number; y: number }) => {
@@ -411,9 +461,11 @@ function App() {
                 nodes={workflowNodes}
                 edges={workflowEdges}
                 selectedNodeId={selectedNodeId}
+                selectedEdgeId={selectedEdgeId}
                 onAgentDrop={handleAgentDrop}
                 onConnectNodes={handleConnectNodes}
-                onNodeSelect={setSelectedNodeId}
+                onNodeSelect={handleSelectNode}
+                onEdgeSelect={handleSelectEdge}
                 onNodePositionChange={handleNodePositionChange}
               />
             ) : (
@@ -522,8 +574,20 @@ function App() {
             onChange={(event) => handleSelectedNodePromptChange(event.target.value)}
           />
           <div className="node-editor__actions">
+            <button type="button" className="btn btn--secondary btn--sm" onClick={handleDuplicateSelectedNode}>Duplicate</button>
             <button type="button" className="btn btn--secondary btn--sm" onClick={() => setSelectedNodeId(null)}>Done</button>
             <button type="button" className="btn btn--danger btn--sm" onClick={handleDeleteSelectedNode}>Delete node</button>
+          </div>
+        </div>
+      )}
+
+      {selectedEdge && (
+        <div className="edge-editor" role="dialog" aria-label="Edit workflow connection">
+          <div className="edge-editor__title">Connection</div>
+          <div className="edge-editor__meta">{selectedEdge.source} → {selectedEdge.target}</div>
+          <div className="node-editor__actions">
+            <button type="button" className="btn btn--secondary btn--sm" onClick={() => setSelectedEdgeId(null)}>Done</button>
+            <button type="button" className="btn btn--danger btn--sm" onClick={handleDeleteSelectedEdge} disabled={selectedEdge.id === 'request-manager'}>Delete edge</button>
           </div>
         </div>
       )}

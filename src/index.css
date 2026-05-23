@@ -282,6 +282,12 @@ body {
   stroke-width: 2.5px;
 }
 
+.workflow-edge--selected path {
+  opacity: 1;
+  stroke-width: 3px;
+  stroke: var(--accent-ink) !important;
+}
+
 .workflow-edge .react-flow__edge-textbg {
   fill: var(--surface-1);
 }
@@ -673,6 +679,34 @@ button.agent-roster__item {
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
   box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-xl);
+}
+
+.edge-editor {
+  position: fixed;
+  right: 24px;
+  bottom: 76px;
+  z-index: 115;
+  width: min(360px, calc(100vw - 48px));
+  padding: var(--space-4);
+  border-radius: var(--r-lg);
+  background: var(--frost-bg-strong);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-xl);
+}
+
+.edge-editor__title {
+  color: var(--ink-1);
+  font-size: var(--fs-16);
+  font-weight: var(--fw-semibold);
+}
+
+.edge-editor__meta {
+  margin-top: var(--space-2);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  word-break: break-word;
 }
 
 .node-editor__header {

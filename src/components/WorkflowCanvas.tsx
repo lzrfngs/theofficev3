@@ -26,9 +26,11 @@ interface WorkflowCanvasProps {
   nodes: WorkflowCanvasNode[];
   edges: WorkflowCanvasEdge[];
   selectedNodeId?: string | null;
+  selectedEdgeId?: string | null;
   onAgentDrop?: (agentId: string, position: { x: number; y: number }) => void;
   onConnectNodes?: (source: string, target: string) => void;
   onNodeSelect?: (nodeId: string | null) => void;
+  onEdgeSelect?: (edgeId: string | null) => void;
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
 }
 
@@ -95,7 +97,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = (props) => (
   </ReactFlowProvider>
 );
 
-const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edges, selectedNodeId, onAgentDrop, onConnectNodes, onNodeSelect, onNodePositionChange }) => {
+const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edges, selectedNodeId, selectedEdgeId, onAgentDrop, onConnectNodes, onNodeSelect, onEdgeSelect, onNodePositionChange }) => {
   const agentMap = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -130,14 +132,15 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edg
         sourceHandle: 'output',
         targetHandle: 'input',
         label: edge.label,
+        selected: edge.id === selectedEdgeId,
         animated: !!edge.active && !isSettled,
-        className: `workflow-edge ${edge.active ? 'workflow-edge--active' : ''}`,
+        className: `workflow-edge ${edge.active ? 'workflow-edge--active' : ''} ${edge.id === selectedEdgeId ? 'workflow-edge--selected' : ''}`,
         markerEnd: {
           type: MarkerType.ArrowClosed
         }
       }))
     );
-  }, [edges, isSettled, setFlowEdges]);
+  }, [edges, isSettled, selectedEdgeId, setFlowEdges]);
 
   if (nodes.length === 0) {
     return (
@@ -172,7 +175,14 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edg
           if (connection.source && connection.target) onConnectNodes?.(connection.source, connection.target);
         }}
         onNodeClick={(_, node) => onNodeSelect?.(node.id)}
-        onPaneClick={() => onNodeSelect?.(null)}
+        onEdgeClick={(_, edge) => {
+          onNodeSelect?.(null);
+          onEdgeSelect?.(edge.id);
+        }}
+        onPaneClick={() => {
+          onNodeSelect?.(null);
+          onEdgeSelect?.(null);
+        }}
         onNodeDragStop={(_, node) => onNodePositionChange?.(node.id, node.position)}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
