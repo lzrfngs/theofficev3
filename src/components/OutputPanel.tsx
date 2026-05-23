@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Agent, ChatMessage } from '../services/coordinator';
+import { renderMarkdown } from '../utils/markdown';
 
 interface OutputPanelProps {
   coordinator: Agent;
@@ -26,7 +27,10 @@ export const OutputPanel: React.FC<OutputPanelProps> = ({ coordinator, messages 
             <span>{latestOutput.sender}</span>
             <span>{latestOutput.timestamp}</span>
           </div>
-          <div className="output-panel__text">{latestOutput.text}</div>
+          <div
+            className="output-panel__text markdown-content"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(latestOutput.text) }}
+          />
         </div>
       ) : (
         <div className="output-panel__empty">
