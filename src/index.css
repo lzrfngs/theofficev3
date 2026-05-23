@@ -451,6 +451,18 @@ body {
   min-width: 128px;
   max-width: 160px;
   flex-shrink: 0;
+  cursor: pointer;
+}
+
+button.agent-roster__item {
+  border-width: 1px;
+}
+
+.agent-roster__item:hover,
+.agent-roster__item:focus-visible {
+  filter: brightness(1.08);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .agent-roster__avatar {
@@ -558,6 +570,79 @@ body {
   font-family: var(--font-serif);
   font-size: var(--fs-24);
   margin-bottom: var(--space-2);
+}
+
+.agent-profile-popover {
+  position: fixed;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  z-index: 120;
+  width: min(560px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--r-lg);
+  background: var(--frost-bg-strong);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-xl);
+}
+
+.agent-profile-popover__close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.agent-profile-popover__portrait {
+  width: 132px;
+  height: 132px;
+  border-radius: var(--r-md);
+  object-fit: cover;
+  box-shadow: var(--edge-ring), var(--shadow-sm);
+}
+
+.agent-profile-popover__content {
+  min-width: 0;
+  padding-right: var(--space-5);
+}
+
+.agent-profile-popover__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.agent-profile-popover__name {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-1);
+  font-family: var(--font-serif);
+  font-size: var(--fs-28);
+  font-weight: 500;
+}
+
+.agent-profile-popover__title {
+  margin: var(--space-1) 0 var(--space-3);
+  color: var(--ink-2);
+  font-size: var(--fs-13);
+}
+
+.agent-profile-popover__approach {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-13);
+  line-height: 1.5;
 }
 
 /* Agent Panel styled with Vellum card */

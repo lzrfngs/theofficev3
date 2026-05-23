@@ -58,6 +58,7 @@ function App() {
   const [finalOutputs, setFinalOutputs] = useState<ChatMessage[]>(() => loadStoredJson(storageKeys.finalOutputs, []));
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => (localStorage.getItem(storageKeys.workspaceView) as WorkspaceView | null) || 'canvas');
+  const [profileAgentId, setProfileAgentId] = useState<string | null>(null);
   
   // Settings State (loaded from localStorage)
   const [provider, setProvider] = useState<ModelProvider>(() => (localStorage.getItem('model_provider') as ModelProvider | null) || 'gemini');
@@ -125,6 +126,7 @@ function App() {
 
   const coordinator = getCoordinator(agents);
   const specialists = getSpecialists(agents);
+  const profileAgent = profileAgentId ? agents.find(agent => agent.id === profileAgentId) : null;
 
   // Update localStorage when setting values change
   const handleSaveSettings = (newProvider: ModelProvider, newModel: string) => {
@@ -228,6 +230,7 @@ function App() {
     setWorkflowEdges([]);
     setFinalOutputs([]);
     setActiveAgent(null);
+    setProfileAgentId(null);
   };
 
   return (
@@ -290,13 +293,20 @@ function App() {
 
         <div className="agent-roster" aria-label="Available specialists">
           {specialists.map(agent => (
-            <span key={agent.id} className={`agent-roster__item ${agent.badgeClass}`} title={`${agent.name}: ${agent.title}`}>
+            <button
+              key={agent.id}
+              className={`agent-roster__item ${agent.badgeClass}`}
+              type="button"
+              title={`${agent.name}: ${agent.title}`}
+              aria-label={`Show profile for ${agent.name}`}
+              onClick={() => setProfileAgentId(prev => prev === agent.id ? null : agent.id)}
+            >
               <img className="agent-roster__avatar" src={agent.avatar} alt="" />
               <span className="agent-roster__text">
                 <span className="agent-roster__name">{agent.name}</span>
                 <span className="agent-roster__title">{agent.title}</span>
               </span>
-            </span>
+            </button>
           ))}
         </div>
 
@@ -337,8 +347,33 @@ function App() {
         onClose={() => setEditingAgent(null)}
         onSave={handleSavePortrait}
       />
+
+      {profileAgent && (
+        <div className="agent-profile-popover" role="dialog" aria-label={`${profileAgent.name} profile`}>
+          <button className="agent-profile-popover__close" type="button" onClick={() => setProfileAgentId(null)} aria-label="Close agent profile">×</button>
+          <img className="agent-profile-popover__portrait" src={profileAgent.avatar} alt="" />
+          <div className="agent-profile-popover__content">
+            <div className="agent-profile-popover__eyebrow">{profileAgent.role.replace(/_/g, ' ')}</div>
+            <h2 className="agent-profile-popover__name">{profileAgent.name}</h2>
+            <p className="agent-profile-popover__title">{profileAgent.title}</p>
+            <p className="agent-profile-popover__approach">{getAgentApproach(profileAgent)}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function getAgentApproach(agent: Agent) {
+  const prompt = agent.systemPrompt || '';
+  const expertMatch = prompt.match(/### Expert Foundation\n([\s\S]*?)(?=\n### |$)/);
+  const workingMatch = prompt.match(/### Working Guidelines\n([\s\S]*?)(?=\n### |$)/);
+  const source = expertMatch?.[1] || workingMatch?.[1] || agent.mockFocus || `${agent.name} brings ${agent.title.toLowerCase()} expertise to the team.`;
+  return source
+    .replace(/[-*#`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 360);
 }
 
 export default App;
