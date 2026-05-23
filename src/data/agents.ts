@@ -20,7 +20,7 @@ export const AGENT_CATALOG: Agent[] = [
     activeClass: 'active-secretary',
     mdFile: 'docs/agents/secretary.md',
     systemPrompt: secretaryPrompt,
-    specialtyKeywords: ['coordinate', 'plan', 'schedule', 'prioritize', 'summarize'],
+    specialtyKeywords: ['coordinate', 'project', 'manage', 'plan', 'schedule', 'prioritize', 'brief', 'scope', 'timeline', 'owner', 'owners', 'summarize'],
     mockAction: 'coordinate the work',
     mockFocus: 'Break the work into clear tasks and synthesize the team output.'
   },
@@ -35,9 +35,9 @@ export const AGENT_CATALOG: Agent[] = [
     activeClass: 'active-writer',
     mdFile: 'docs/agents/writer.md',
     systemPrompt: writerPrompt,
-    specialtyKeywords: ['write', 'copy', 'campaign', 'pitch', 'slogan', 'tagline', 'brand', 'ad', 'hook', 'creative', 'script'],
+    specialtyKeywords: ['write', 'copy', 'campaign', 'pitch', 'slogan', 'tagline', 'brand', 'voice', 'naming', 'headline', 'ad', 'hook', 'creative', 'script', 'manifesto'],
     mockAction: 'write a creative hook',
-    mockFocus: 'Shape the idea into a clear hook, stronger messaging, and practical copy options.',
+    mockFocus: 'Shape the idea into brand voice, a stronger hook, and campaignable copy options.',
     mockResponse: `### Creative Advertising & Hook
 Here are potential angles using the **AIDA** framework:
 
@@ -60,9 +60,9 @@ Here are potential angles using the **AIDA** framework:
     activeClass: 'active-strategist',
     mdFile: 'docs/agents/strategist.md',
     systemPrompt: strategistPrompt,
-    specialtyKeywords: ['strategy', 'market', 'business', 'launch', 'pricing', 'swot', 'plan', 'kpi', 'positioning', 'growth'],
+    specialtyKeywords: ['strategy', 'market', 'business', 'launch', 'pricing', 'swot', 'plan', 'kpi', 'positioning', 'growth', 'brand', 'architecture', 'category', 'gtm', 'value proposition'],
     mockAction: 'map out a strategy',
-    mockFocus: 'Turn the request into positioning, milestones, and measurable next steps.',
+    mockFocus: 'Turn the request into positioning, brand strategy, business choices, and measurable next steps.',
     mockResponse: `### Business & Positioning Strategy
 Here is the positioning frame:
 
@@ -85,9 +85,9 @@ Here is the positioning frame:
     activeClass: 'active-anthropologist',
     mdFile: 'docs/agents/anthropologist.md',
     systemPrompt: anthropologistPrompt,
-    specialtyKeywords: ['user', 'audience', 'customer', 'demographic', 'behavior', 'people', 'culture', 'community', 'research'],
+    specialtyKeywords: ['user', 'audience', 'customer', 'demographic', 'behavior', 'people', 'culture', 'community', 'attention', 'productivity', 'burnout', 'trust', 'adoption', 'research'],
     mockAction: 'analyze user behavior',
-    mockFocus: 'Clarify the human context, cultural friction, and language that will feel authentic.',
+    mockFocus: 'Clarify the human context, cultural friction, attention dynamics, and language that will feel authentic.',
     mockResponse: `### Cultural Insights & User Behavior
 The strongest opportunity is trust. Users respond when agent systems feel legible and controllable instead of magical or opaque.
 
@@ -106,9 +106,9 @@ The strongest opportunity is trust. Users respond when agent systems feel legibl
     activeClass: 'active-researcher',
     mdFile: 'docs/agents/researcher.md',
     systemPrompt: researcherPrompt,
-    specialtyKeywords: ['research', 'source', 'sources', 'fact', 'facts', 'evidence', 'verify', 'validation', 'compare', 'comparison', 'benchmark', 'examples', 'reference', 'scan', 'discovery', 'background', 'investigate'],
+    specialtyKeywords: ['research', 'source', 'sources', 'fact', 'facts', 'evidence', 'verify', 'validation', 'compare', 'comparison', 'benchmark', 'examples', 'reference', 'scan', 'discovery', 'background', 'investigate', 'competitive', 'category', 'audit', 'interview', 'survey', 'usability'],
     mockAction: 'gather evidence and context',
-    mockFocus: 'Clarify what is known, what needs validation, and which findings should guide the team.',
+    mockFocus: 'Clarify what is known, what needs validation, and which findings should guide brand, strategy, design, and product decisions.',
     mockResponse: `### Research Brief & Evidence Map
 I would frame the investigation around three questions:
 
@@ -131,7 +131,7 @@ I would frame the investigation around three questions:
     activeClass: 'active-futurist',
     mdFile: 'docs/agents/futurist.md',
     systemPrompt: futuristPrompt,
-    specialtyKeywords: ['future', 'futures', 'futurist', 'foresight', 'signal', 'signals', 'scenario', 'scenarios', 'horizon', 'trend', 'trends', 'implications', 'plausible', 'forecast', 'forecasting', 'backcast', 'backcasting', 'steep', 'uncertainty', 'uncertainties', 'what if', 'where is this going'],
+    specialtyKeywords: ['future', 'futures', 'futurist', 'foresight', 'signal', 'signals', 'scenario', 'scenarios', 'horizon', 'trend', 'trends', 'implications', 'plausible', 'forecast', 'forecasting', 'backcast', 'backcasting', 'steep', 'uncertainty', 'uncertainties', 'what if', 'where is this going', 'watchpoint', 'leading indicator'],
     mockAction: 'build a future-facing scenario frame',
     mockFocus: 'Use signals and foresight frameworks to map plausible futures, tensions, and decision points.',
     mockResponse: `### Futures Scan & Scenario Frame
@@ -157,9 +157,9 @@ I would treat this as a foresight pass, not a prediction.
     activeClass: 'active-tech',
     mdFile: 'docs/agents/tech_expert.md',
     systemPrompt: techExpertPrompt,
-    specialtyKeywords: ['code', 'tech', 'api', 'develop', 'system', 'architecture', 'backend', 'database', 'typescript', 'react', 'build', 'setup', 'program', 'script', 'deploy'],
+    specialtyKeywords: ['code', 'tech', 'api', 'develop', 'system', 'architecture', 'backend', 'database', 'typescript', 'react', 'build', 'setup', 'program', 'script', 'deploy', 'ai', 'agent', 'agents', 'llm', 'prototype', 'automation', 'vibe coding'],
     mockAction: 'architect the technical path',
-    mockFocus: 'Define the implementation steps, integration constraints, and deployment path.',
+    mockFocus: 'Define the AI, agent, prototype, implementation, integration, and deployment path.',
     mockResponse: `### Technical Architecture & Integrations
 Recommended implementation pattern:
 
