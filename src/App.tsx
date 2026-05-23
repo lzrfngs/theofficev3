@@ -424,34 +424,48 @@ function App() {
         </div>
 
         <section className="workspace-panel" aria-label="Workflow and output workspace">
-          <div className="workspace-tabs" role="tablist" aria-label="Workspace views">
-            <button
-              className={`workspace-tab ${workspaceView === 'canvas' ? 'is-active' : ''}`}
-              type="button"
-              role="tab"
-              aria-selected={workspaceView === 'canvas'}
-              onClick={() => setWorkspaceView('canvas')}
-            >
-              Canvas
-            </button>
-            <button
-              className={`workspace-tab ${workspaceView === 'output' ? 'is-active' : ''}`}
-              type="button"
-              role="tab"
-              aria-selected={workspaceView === 'output'}
-              onClick={() => setWorkspaceView('output')}
-            >
-              Output
-            </button>
-            <button
-              className="workspace-tab workspace-tab--run"
-              type="button"
-              onClick={handleRunAuthoredFlow}
-              disabled={isRunning || workflowNodes.filter(node => node.type === 'agent').length === 0}
-              title="Run authored workflow"
-            >
-              Run flow
-            </button>
+          <div className="workspace-header">
+            <div className="workspace-tabs" role="tablist" aria-label="Workspace views">
+              <button
+                className={`workspace-tab ${workspaceView === 'canvas' ? 'is-active' : ''}`}
+                type="button"
+                role="tab"
+                aria-selected={workspaceView === 'canvas'}
+                onClick={() => setWorkspaceView('canvas')}
+              >
+                Canvas
+              </button>
+              <button
+                className={`workspace-tab ${workspaceView === 'output' ? 'is-active' : ''}`}
+                type="button"
+                role="tab"
+                aria-selected={workspaceView === 'output'}
+                onClick={() => setWorkspaceView('output')}
+              >
+                Output
+              </button>
+            </div>
+
+            <div className="workspace-actions" aria-label="Workflow actions">
+              {selectedEdge && selectedEdge.id !== 'request-manager' && (
+                <button
+                  className="btn btn--danger btn--sm"
+                  type="button"
+                  onClick={handleDeleteSelectedEdge}
+                >
+                  Delete connection
+                </button>
+              )}
+              <button
+                className="btn btn--primary btn--sm"
+                type="button"
+                onClick={handleRunAuthoredFlow}
+                disabled={isRunning || workflowNodes.filter(node => node.type === 'agent').length === 0}
+                title="Run authored workflow"
+              >
+                Run flow
+              </button>
+            </div>
           </div>
 
           <div className="workspace-tab-panel" role="tabpanel">
