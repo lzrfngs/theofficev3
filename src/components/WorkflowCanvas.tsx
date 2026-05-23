@@ -4,7 +4,10 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  Handle,
+  MarkerType,
   MiniMap,
+  Position,
   type Edge,
   type Node,
   type NodeProps
@@ -39,6 +42,9 @@ const WorkflowNode: React.FC<NodeProps<Node<WorkflowNodeData>>> = ({ data }) => 
 
   return (
     <div className={`workflow-node ${agentClass} workflow-node--${workflowNode.type} workflow-node--${workflowNode.status}`}>
+      <Handle className="workflow-node__handle workflow-node__handle--target" type="target" position={Position.Left} id="input" />
+      <Handle className="workflow-node__handle workflow-node__handle--source" type="source" position={Position.Right} id="output" />
+
       <div className="workflow-node__header">
         {isAgent && agent?.avatar ? (
           <img className="workflow-node__avatar" src={agent.avatar} alt="" />
@@ -75,10 +81,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
   const agentMap = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
 
   const flowNodes = useMemo<Node<WorkflowNodeData>[]>(() => (
-    nodes.map((node, index) => ({
+    nodes.map((node) => ({
       id: node.id,
       type: 'workflow',
-      position: getNodePosition(node, index),
+      position: getNodePosition(node, nodes),
       data: {
         workflowNode: node,
         agent: node.agentId ? agentMap.get(node.agentId) : undefined
@@ -91,9 +97,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
       id: edge.id,
       source: edge.source,
       target: edge.target,
+      sourceHandle: 'output',
+      targetHandle: 'input',
       label: edge.label,
       animated: true,
-      className: 'workflow-edge'
+      className: 'workflow-edge',
+      markerEnd: {
+        type: MarkerType.ArrowClosed
+      }
     }))
   ), [edges]);
 
@@ -124,20 +135,27 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({ agents, nodes, e
       >
         <Background variant={BackgroundVariant.Lines} gap={28} size={1} />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable nodeStrokeWidth={3} />
+        <MiniMap pannable zoomable nodeStrokeWidth={3} bgColor="var(--surface-1)" maskColor="oklch(0 0 0 / 0.18)" />
       </ReactFlow>
     </section>
   );
 };
 
-function getNodePosition(node: WorkflowCanvasNode, index: number) {
-  if (node.type === 'request') return { x: 0, y: 120 };
-  if (node.type === 'manager') return { x: 280, y: 120 };
-  if (node.type === 'synthesis') return { x: 880, y: 120 };
+function getNodePosition(node: WorkflowCanvasNode, nodes: WorkflowCanvasNode[]) {
+  const agentNodes = nodes.filter(item => item.type === 'agent');
+  const agentColumns = Math.max(1, Math.ceil(agentNodes.length / 4));
+  const centerY = Math.max(180, 70 + Math.min(agentNodes.length, 4) * 105);
 
-  const agentIndex = Math.max(0, index - 2);
+  if (node.type === 'request') return { x: 0, y: centerY };
+  if (node.type === 'manager') return { x: 320, y: centerY };
+  if (node.type === 'synthesis') return { x: 760 + agentColumns * 360, y: centerY };
+
+  const agentIndex = Math.max(0, agentNodes.findIndex(item => item.id === node.id));
+  const column = Math.floor(agentIndex / 4);
+  const row = agentIndex % 4;
+
   return {
-    x: 560,
-    y: 20 + agentIndex * 160
+    x: 680 + column * 360,
+    y: 40 + row * 230
   };
 }

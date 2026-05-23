@@ -114,11 +114,7 @@ body {
   min-height: 0;
   overflow: hidden;
   border-radius: var(--r-lg);
-  background:
-    linear-gradient(var(--line-1) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line-1) 1px, transparent 1px),
-    var(--surface-0);
-  background-size: 28px 28px;
+  background: var(--surface-0);
   box-shadow: var(--edge-ring), var(--shadow-sm);
 }
 
@@ -126,6 +122,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  background:
+    linear-gradient(var(--line-1) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-1) 1px, transparent 1px),
+    var(--surface-0);
+  background-size: 28px 28px;
 }
 
 .workflow-canvas__empty {
@@ -157,7 +158,25 @@ body {
 
 .workflow-edge path {
   stroke: var(--accent) !important;
-  stroke-width: 1.5px;
+  stroke-width: 2px;
+}
+
+.workflow-edge .react-flow__edge-textbg {
+  fill: var(--surface-1);
+}
+
+.workflow-edge .react-flow__edge-text {
+  fill: var(--ink-2);
+}
+
+.workflow-canvas .react-flow__arrowclosed path {
+  fill: var(--accent) !important;
+  stroke: var(--accent) !important;
+}
+
+.workflow-canvas .react-flow__background line {
+  stroke: var(--line-2);
+  opacity: 0.75;
 }
 
 .workflow-node {
@@ -169,6 +188,7 @@ body {
   background: var(--frost-bg-strong);
   color: var(--ink-1);
   box-shadow: var(--edge-top), var(--shadow-md);
+  position: relative;
 }
 
 .workflow-node.badge-secretary { --node-accent: var(--color-secretary); }
@@ -190,6 +210,22 @@ body {
 
 .workflow-node--error {
   border-color: color-mix(in oklch, var(--danger), transparent 30%);
+}
+
+.workflow-node__handle {
+  width: 14px !important;
+  height: 14px !important;
+  border: 2px solid var(--surface-0) !important;
+  background: var(--node-accent) !important;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--node-accent), transparent 35%);
+}
+
+.workflow-node__handle--target {
+  left: -7px !important;
+}
+
+.workflow-node__handle--source {
+  right: -7px !important;
 }
 
 .workflow-node__header {
