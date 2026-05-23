@@ -13,7 +13,7 @@ The app imports these markdown files at build time, so they travel with the depl
 
 Current agents:
 
-- Penny: coordinator
+- Penny: manager and coordinator
 - Stephen: writer
 - August: creative director
 - Evelyn: strategist
