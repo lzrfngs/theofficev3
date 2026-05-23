@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Settings, Trash2, Sun, Moon } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Agent, ChatMessage, ModelProvider } from './services/coordinator';
-import type { WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
+import type { SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
 import {
   INITIAL_AGENTS,
   loadAgentSystemPrompts,
@@ -12,16 +12,18 @@ import {
 import { AgentPanel } from './components/AgentPanel';
 import { WorkflowCanvas } from './components/WorkflowCanvas';
 import { OutputPanel } from './components/OutputPanel';
+import { SourcesPanel } from './components/SourcesPanel';
 import { SettingsModal } from './components/SettingsModal';
 import { EditProfileModal } from './components/EditProfileModal';
 
-type WorkspaceView = 'canvas' | 'output';
+type WorkspaceView = 'canvas' | 'output' | 'sources';
 
 const storageKeys = {
   messages: 'the_office_messages_v1',
   workflowNodes: 'the_office_workflow_nodes_v1',
   workflowEdges: 'the_office_workflow_edges_v1',
   finalOutputs: 'the_office_final_outputs_v1',
+  sources: 'the_office_sources_v1',
   workspaceView: 'the_office_workspace_view_v1'
 };
 
@@ -57,12 +59,14 @@ function App() {
   const [workflowNodes, setWorkflowNodes] = useState<WorkflowCanvasNode[]>(() => loadStoredJson(storageKeys.workflowNodes, []));
   const [workflowEdges, setWorkflowEdges] = useState<WorkflowCanvasEdge[]>(() => loadStoredJson(storageKeys.workflowEdges, []));
   const [finalOutputs, setFinalOutputs] = useState<ChatMessage[]>(() => loadStoredJson(storageKeys.finalOutputs, []));
+  const [sources, setSources] = useState<SourceRecord[]>(() => loadStoredJson(storageKeys.sources, []));
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => (localStorage.getItem(storageKeys.workspaceView) as WorkspaceView | null) || 'canvas');
   const [profileAgentId, setProfileAgentId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const manualNodeCounter = useRef(0);
+  const manualSourceCounter = useRef(0);
   
   // Settings State (loaded from localStorage)
   const [provider, setProvider] = useState<ModelProvider>(() => (localStorage.getItem('model_provider') as ModelProvider | null) || 'gemini');
@@ -101,6 +105,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem(storageKeys.finalOutputs, JSON.stringify(finalOutputs));
   }, [finalOutputs]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.sources, JSON.stringify(sources));
+  }, [sources]);
 
   useEffect(() => {
     localStorage.setItem(storageKeys.workspaceView, workspaceView);
@@ -194,6 +202,10 @@ function App() {
       setWorkspaceView('output');
     };
 
+    const handleSources = (newSources: SourceRecord[]) => {
+      setSources(prev => [...prev, ...newSources]);
+    };
+
     try {
       if (hasAuthoredFlow) {
         setWorkflowNodes(prev => prev.map(node => node.id === 'request' ? { ...node, output: text } : node));
@@ -211,7 +223,9 @@ function App() {
           (agentId, isThinking) => setThinking(prev => ({ ...prev, [agentId]: isThinking })),
           handleWorkflowNodeUpdate,
           handleWorkflowEdgeUpdate,
-          handleFinalOutput
+          handleFinalOutput,
+          handleSources,
+          sources
         );
       } else {
         setWorkflowNodes([]);
@@ -234,7 +248,9 @@ function App() {
           handleWorkflowPlan,
           handleWorkflowNodeUpdate,
           handleWorkflowEdgeUpdate,
-          handleFinalOutput
+          handleFinalOutput,
+          handleSources,
+          sources
         );
       }
 
@@ -256,6 +272,7 @@ function App() {
     setWorkflowNodes([]);
     setWorkflowEdges([]);
     setFinalOutputs([]);
+    setSources([]);
     setActiveAgent(null);
     setProfileAgentId(null);
     setSelectedNodeId(null);
@@ -408,7 +425,9 @@ function App() {
         (message) => {
           setFinalOutputs(prev => [...prev, message]);
           setWorkspaceView('output');
-        }
+        },
+        (newSources) => setSources(prev => [...prev, ...newSources]),
+        sources
       );
       confetti({ particleCount: 60, spread: 65, origin: { y: 0.65 } });
     } finally {
@@ -420,6 +439,16 @@ function App() {
   const getLatestUserRequest = () => {
     const latest = [...(messages[coordinator.id] || [])].reverse().find(message => message.role === 'user');
     return latest?.text || 'Run this authored workflow.';
+  };
+
+  const handleAddManualSource = (source: Omit<SourceRecord, 'id' | 'timestamp' | 'provider'>) => {
+    manualSourceCounter.current += 1;
+    setSources(prev => [...prev, {
+      ...source,
+      id: `manual-${manualSourceCounter.current.toString(36)}`,
+      provider: 'manual',
+      timestamp: new Date().toISOString()
+    }]);
   };
 
   return (
@@ -461,6 +490,15 @@ function App() {
               >
                 Output
               </button>
+              <button
+                className={`workspace-tab ${workspaceView === 'sources' ? 'is-active' : ''}`}
+                type="button"
+                role="tab"
+                aria-selected={workspaceView === 'sources'}
+                onClick={() => setWorkspaceView('sources')}
+              >
+                Sources
+              </button>
             </div>
 
           </div>
@@ -483,8 +521,10 @@ function App() {
                 onRunFlow={handleRunAuthoredFlow}
                 onNodePositionChange={handleNodePositionChange}
               />
-            ) : (
+            ) : workspaceView === 'output' ? (
               <OutputPanel coordinator={coordinator} messages={finalOutputs} />
+            ) : (
+              <SourcesPanel sources={sources} onAddSource={handleAddManualSource} onClearSources={() => setSources([])} />
             )}
           </div>
         </section>

@@ -1,5 +1,5 @@
 import { AGENT_CATALOG } from '../data/agents';
-import type { WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from '../types/workflow';
+import type { SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from '../types/workflow';
 
 export interface Agent {
   id: string;
@@ -77,7 +77,7 @@ export async function loadAgentSystemPrompts(agents: Agent[]): Promise<Agent[]> 
   return loadedAgents;
 }
 
-async function callModel(provider: ModelProvider, model: string, systemInstruction: string, prompt: string): Promise<string> {
+async function callModel(provider: ModelProvider, model: string, systemInstruction: string, prompt: string, maxOutputTokens = 4096): Promise<string> {
   const response = await fetch('/api/generate', {
     method: 'POST',
     headers: {
@@ -89,7 +89,7 @@ async function callModel(provider: ModelProvider, model: string, systemInstructi
       system: systemInstruction,
       prompt,
       temperature: 0.7,
-      maxOutputTokens: 2048,
+      maxOutputTokens,
     })
   });
 
@@ -103,6 +103,32 @@ async function callModel(provider: ModelProvider, model: string, systemInstructi
   return text;
 }
 
+async function searchWeb(query: string, usedBy: string): Promise<SourceRecord[]> {
+  const response = await fetch('/api/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, maxResults: 5 })
+  });
+
+  if (!response.ok) return [];
+  const data = await response.json();
+  return (data?.results ?? []).map((result: { title: string; url: string; snippet: string; provider: SourceRecord['provider'] }, index: number) => ({
+    id: `${usedBy}-${Date.now().toString(36)}-${index}`,
+    title: result.title,
+    url: result.url,
+    snippet: result.snippet,
+    query,
+    provider: result.provider,
+    usedBy,
+    timestamp: new Date().toISOString()
+  }));
+}
+
+function formatSourcesForPrompt(sources: SourceRecord[]) {
+  if (sources.length === 0) return '';
+  return `\n\nAvailable sources:\n${sources.map((source, index) => `${index + 1}. ${source.title}${source.url ? ` (${source.url})` : ''}\n${source.snippet}`).join('\n\n')}`;
+}
+
 // Coordinate the multi-agent execution pipeline
 export async function runMultiAgentPipeline(
   userQuery: string,
@@ -114,7 +140,9 @@ export async function runMultiAgentPipeline(
   onWorkflowPlan?: (nodes: WorkflowCanvasNode[], edges: WorkflowCanvasEdge[]) => void,
   onWorkflowNodeUpdate?: (nodeId: string, update: WorkflowNodeUpdate) => void,
   onWorkflowEdgeUpdate?: (edgeId: string, update: Partial<WorkflowCanvasEdge>) => void,
-  onFinalOutput?: (message: ChatMessage) => void
+  onFinalOutput?: (message: ChatMessage) => void,
+  onSources?: (sources: SourceRecord[]) => void,
+  existingSources: SourceRecord[] = []
 ): Promise<void> {
   
   // 1. Warm-up and load prompts if they aren't loaded yet
@@ -163,7 +191,7 @@ Your response MUST be valid JSON in this exact format:
 Do not write markdown formatting (like \`\`\`json) in your raw output, output only the JSON string.
 `;
 
-    const planTextRaw = await callModel(provider, model, secretary.systemPrompt || '', planningPrompt);
+    const planTextRaw = await callModel(provider, model, secretary.systemPrompt || '', `${planningPrompt}${formatSourcesForPrompt(existingSources)}`);
     onThinking(secretary.id, false);
 
     // Clean JSON wrapper if the LLM outputted code blocks
@@ -217,7 +245,15 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
 
       // Fetch prompt
       try {
-        const subResult = await callModel(provider, model, targetAgent.systemPrompt || '', delegation.prompt);
+        let runSources = existingSources;
+        if (targetAgent.role === 'researcher') {
+          const foundSources = await searchWeb(`${userQuery}\n${delegation.prompt}`, targetAgent.name);
+          if (foundSources.length > 0) {
+            onSources?.(foundSources);
+            runSources = [...existingSources, ...foundSources];
+          }
+        }
+        const subResult = await callModel(provider, model, targetAgent.systemPrompt || '', `${delegation.prompt}${formatSourcesForPrompt(runSources)}`);
         subAgentResults[targetAgent.name] = subResult;
         
         onStep(targetAgent.id, {
@@ -264,7 +300,7 @@ Based on their findings and your role as Penny (Executive Coordinator), present 
 Keep the tone direct and concise, avoiding excessive conversational filler, fluff, or chatty pleasantries.
 `;
 
-    const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', synthesisPrompt);
+    const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', `${synthesisPrompt}${formatSourcesForPrompt(existingSources)}`, 6144);
     onThinking(secretary.id, false);
     onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'complete', output: summarizeForNode(finalAnswer) });
     workflow.edges
@@ -311,7 +347,9 @@ export async function runAuthoredWorkflow(
   onThinking: (agentId: string, isThinking: boolean) => void,
   onWorkflowNodeUpdate: (nodeId: string, update: WorkflowNodeUpdate) => void,
   onWorkflowEdgeUpdate: (edgeId: string, update: Partial<WorkflowCanvasEdge>) => void,
-  onFinalOutput: (message: ChatMessage) => void
+  onFinalOutput: (message: ChatMessage) => void,
+  onSources: (sources: SourceRecord[]) => void,
+  existingSources: SourceRecord[] = []
 ) {
   const activeAgents = agents.some(agent => agent.systemPrompt) ? agents : await loadAgentSystemPrompts(agents);
   const manager = getCoordinator(activeAgents);
@@ -343,7 +381,16 @@ export async function runAuthoredWorkflow(
       .join('\n\n');
 
     const defaultPrompt = `Contribute your ${agent.title} expertise to this workflow.`;
-    const prompt = `${node.prompt || defaultPrompt}\n\nUser request:\n${userQuery}\n\n${upstreamContext ? `Upstream context:\n${upstreamContext}` : ''}`;
+    let runSources = existingSources;
+    if (agent.role === 'researcher') {
+      const foundSources = await searchWeb(`${userQuery}\n${node.prompt || defaultPrompt}`, agent.name);
+      if (foundSources.length > 0) {
+        onSources(foundSources);
+        runSources = [...existingSources, ...foundSources];
+      }
+    }
+
+    const prompt = `${node.prompt || defaultPrompt}\n\nUser request:\n${userQuery}\n\n${upstreamContext ? `Upstream context:\n${upstreamContext}` : ''}${formatSourcesForPrompt(runSources)}`;
 
     try {
       const output = await callModel(provider, model, agent.systemPrompt || '', prompt);
@@ -377,8 +424,8 @@ export async function runAuthoredWorkflow(
   onThinking(manager.id, true);
 
   const workflowOutputs = Object.entries(nodeOutputs).map(([id, output]) => `\n## ${id}\n${output}`).join('\n');
-  const synthesisPrompt = `Synthesize this authored workflow into a polished final output.\n\nUser request:\n${userQuery}\n\nWorkflow outputs:\n${workflowOutputs}`;
-  const finalAnswer = await callModel(provider, model, manager.systemPrompt || '', synthesisPrompt);
+  const synthesisPrompt = `Synthesize this authored workflow into a polished final output.\n\nUser request:\n${userQuery}\n\nWorkflow outputs:\n${workflowOutputs}${formatSourcesForPrompt(existingSources)}`;
+  const finalAnswer = await callModel(provider, model, manager.systemPrompt || '', synthesisPrompt, 6144);
   onThinking(manager.id, false);
   onWorkflowNodeUpdate(synthesisNode.id, { status: 'complete', output: summarizeForNode(finalAnswer) });
   edges.filter(edge => edge.target === synthesisNode.id).forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: false }));

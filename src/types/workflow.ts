@@ -22,3 +22,14 @@ export interface WorkflowCanvasEdge {
 }
 
 export type WorkflowNodeUpdate = Partial<Omit<WorkflowCanvasNode, 'id'>>;
+
+export interface SourceRecord {
+  id: string;
+  title: string;
+  url?: string;
+  snippet: string;
+  query?: string;
+  provider: 'manual' | 'tavily' | 'exa' | 'brave' | 'bing' | 'model';
+  usedBy?: string;
+  timestamp: string;
+}

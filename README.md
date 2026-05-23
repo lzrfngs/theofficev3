@@ -24,6 +24,10 @@ Copy `.env.example` for local reference and add the matching variables in Vercel
 
 There is also an image-generation foundation at `/api/generate-image`, configured for OpenAI image models such as `gpt-image-2`. This is intended for future real-time thinking portraits and visual agent-state experiments.
 
+## Sources & Web Search
+
+The Sources tab stores manual sources and web results. Mira can search the web during researcher steps when `TAVILY_API_KEY` is configured in Vercel. Search results are saved with title, URL, snippet, query, provider, and the agent that used them.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.
