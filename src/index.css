@@ -206,6 +206,23 @@ body {
   border-radius: var(--r-lg);
   background: var(--surface-0);
   box-shadow: var(--edge-ring), var(--shadow-sm);
+  position: relative;
+}
+
+.workflow-canvas__toolbar {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--frost-bg-strong);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  backdrop-filter: saturate(160%) blur(14px);
+  box-shadow: var(--edge-top), 0 0 0 1px var(--frost-border), var(--shadow-md);
 }
 
 .workflow-canvas--empty {

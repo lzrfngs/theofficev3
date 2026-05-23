@@ -27,10 +27,14 @@ interface WorkflowCanvasProps {
   edges: WorkflowCanvasEdge[];
   selectedNodeId?: string | null;
   selectedEdgeId?: string | null;
+  canRun?: boolean;
+  isRunning?: boolean;
   onAgentDrop?: (agentId: string, position: { x: number; y: number }) => void;
   onConnectNodes?: (source: string, target: string) => void;
   onNodeSelect?: (nodeId: string | null) => void;
   onEdgeSelect?: (edgeId: string | null) => void;
+  onDeleteEdge?: () => void;
+  onRunFlow?: () => void;
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
 }
 
@@ -97,7 +101,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = (props) => (
   </ReactFlowProvider>
 );
 
-const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edges, selectedNodeId, selectedEdgeId, onAgentDrop, onConnectNodes, onNodeSelect, onEdgeSelect, onNodePositionChange }) => {
+const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edges, selectedNodeId, selectedEdgeId, canRun = false, isRunning = false, onAgentDrop, onConnectNodes, onNodeSelect, onEdgeSelect, onDeleteEdge, onRunFlow, onNodePositionChange }) => {
   const agentMap = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -155,6 +159,9 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edg
           onAgentDrop?.(agentId, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
         }}
       >
+        <div className="workflow-canvas__toolbar" aria-label="Canvas actions">
+          <button className="btn btn--primary btn--sm" type="button" onClick={onRunFlow} disabled={!canRun || isRunning}>Run flow</button>
+        </div>
         <div className="workflow-canvas__empty">
           <div className="workflow-canvas__empty-title">Canvas ready</div>
           <div className="workflow-canvas__empty-copy">Give Penny a task and she will assemble the right team here.</div>
@@ -165,6 +172,12 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edg
 
   return (
     <section className="workflow-canvas" aria-label="Workflow canvas">
+      <div className="workflow-canvas__toolbar" aria-label="Canvas actions">
+        {selectedEdgeId && selectedEdgeId !== 'request-manager' && (
+          <button className="btn btn--danger btn--sm" type="button" onClick={onDeleteEdge}>Delete connection</button>
+        )}
+        <button className="btn btn--primary btn--sm" type="button" onClick={onRunFlow} disabled={!canRun || isRunning}>Run flow</button>
+      </div>
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}

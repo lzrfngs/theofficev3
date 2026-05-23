@@ -290,11 +290,7 @@ function App() {
     setWorkflowNodes(prev => needsScaffold ? [requestNode, managerNode, agentNode, synthesisNode] : [...prev, agentNode]);
     setWorkflowEdges(prev => {
       const baseEdges = needsScaffold ? [{ id: 'request-manager', source: 'request', target: 'manager' }] : prev;
-      return [
-        ...baseEdges,
-        { id: `manager-${nodeId}`, source: 'manager', target: nodeId },
-        { id: `${nodeId}-synthesis`, source: nodeId, target: 'synthesis' }
-      ];
+      return baseEdges;
     });
     setSelectedNodeId(nodeId);
     setSelectedEdgeId(null);
@@ -446,26 +442,6 @@ function App() {
               </button>
             </div>
 
-            <div className="workspace-actions" aria-label="Workflow actions">
-              {selectedEdge && selectedEdge.id !== 'request-manager' && (
-                <button
-                  className="btn btn--danger btn--sm"
-                  type="button"
-                  onClick={handleDeleteSelectedEdge}
-                >
-                  Delete connection
-                </button>
-              )}
-              <button
-                className="btn btn--primary btn--sm"
-                type="button"
-                onClick={handleRunAuthoredFlow}
-                disabled={isRunning || workflowNodes.filter(node => node.type === 'agent').length === 0}
-                title="Run authored workflow"
-              >
-                Run flow
-              </button>
-            </div>
           </div>
 
           <div className="workspace-tab-panel" role="tabpanel">
@@ -476,10 +452,14 @@ function App() {
                 edges={workflowEdges}
                 selectedNodeId={selectedNodeId}
                 selectedEdgeId={selectedEdgeId}
+                canRun={workflowNodes.filter(node => node.type === 'agent').length > 0}
+                isRunning={isRunning}
                 onAgentDrop={handleAgentDrop}
                 onConnectNodes={handleConnectNodes}
                 onNodeSelect={handleSelectNode}
                 onEdgeSelect={handleSelectEdge}
+                onDeleteEdge={handleDeleteSelectedEdge}
+                onRunFlow={handleRunAuthoredFlow}
                 onNodePositionChange={handleNodePositionChange}
               />
             ) : (
