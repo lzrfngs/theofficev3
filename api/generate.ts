@@ -113,7 +113,7 @@ async function callOpenAI(request: Required<GenerateRequest>, endpoint: string, 
         { role: 'user', content: request.prompt }
       ],
       temperature: request.temperature,
-      max_tokens: request.maxOutputTokens
+      max_completion_tokens: request.maxOutputTokens
     })
   });
 
@@ -175,7 +175,7 @@ async function callAzureOpenAI(request: Required<GenerateRequest>) {
         { role: 'user', content: request.prompt }
       ],
       temperature: request.temperature,
-      max_tokens: request.maxOutputTokens
+      max_completion_tokens: request.maxOutputTokens
     })
   });
 
