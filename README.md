@@ -5,6 +5,7 @@ A Vite + React multi-agent workspace. Penny coordinates specialist agents, route
 ## Workflow Canvas
 
 The app opens with Penny on the left and an empty workflow canvas on the right. When a user gives Penny a task, Penny plans the right team and the app renders the work as connected nodes. Agents can appear multiple times in a single flow when the work needs to loop back through the same specialist.
+Execution now follows dependency-aware graph semantics (not simple list order): step dependencies are honored, dependency outputs are passed downstream, and synthesis runs against the full in-run state.
 
 Local simulated mode has been removed. Live agent runs use the server-side model router in `api/generate.ts`.
 
@@ -26,7 +27,9 @@ There is also an image-generation foundation at `/api/generate-image`, configure
 
 ## Sources & Web Search
 
-The Sources tab stores manual sources and web results. Mira can search the web during researcher steps when `TAVILY_API_KEY` is configured in Vercel. Search results are saved with title, URL, snippet, query, provider, and the agent that used them.
+The Sources tab stores manual sources and web results. During workflow execution, web search is selected through a tool registry and can be triggered by evidence-oriented steps (not only by a single hardcoded role). Newly discovered sources are propagated into later steps and synthesis. Search results are saved with title, URL, snippet, query, provider, and the agent that used them.
+
+Final synthesis prompts now explicitly request source-aware citations (`[S1]`, `[S2]`, …) and confidence/uncertainty cues when evidence is partial.
 
 ## Agent Profiles
 
