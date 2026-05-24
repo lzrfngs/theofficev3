@@ -9,6 +9,8 @@ export interface WorkflowCanvasNode {
   agentId?: string;
   prompt?: string;
   output?: string;
+  provider?: WorkflowModelProvider;
+  model?: string;
   position?: { x: number; y: number };
   manual?: boolean;
 }
@@ -23,6 +25,8 @@ export interface WorkflowCanvasEdge {
 
 export type WorkflowNodeUpdate = Partial<Omit<WorkflowCanvasNode, 'id'>>;
 
+export type WorkflowModelProvider = 'gemini' | 'openai' | 'anthropic' | 'azure-openai' | 'github-models';
+
 export interface SourceRecord {
   id: string;
   title: string;
@@ -32,4 +36,16 @@ export interface SourceRecord {
   provider: 'manual' | 'tavily' | 'exa' | 'brave' | 'bing' | 'model';
   usedBy?: string;
   timestamp: string;
+}
+
+export interface RunStateMemory {
+  objective: string;
+  assumptions: string[];
+  evidence: string[];
+  conflicts: string[];
+  unansweredQuestions: string[];
+  decisions: string[];
+  stepOutputs: Record<string, string[]>;
+  stepSummaries: Record<string, string>;
+  sources: SourceRecord[];
 }
