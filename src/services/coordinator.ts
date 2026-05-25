@@ -3,9 +3,12 @@ import type {
   EvidenceClaim,
   EvidenceCategory,
   EvidencePolicy,
+  EvaluationScorecard,
   ExecutionTraceRecord,
   FactualClaim,
   KnowledgeItem,
+  DeliverableSection,
+  ProjectMemorySnapshot,
   ResearchBrief,
   ResearchQuery,
   RunEvaluation,
@@ -379,6 +382,30 @@ function formatStepResultsForSynthesis(stepResults: Record<string, StepExecution
     .join('\n');
 }
 
+const REQUIRED_DELIVERABLE_SECTIONS = [
+  'Executive Read',
+  'Evidence Base',
+  'Market Truth',
+  'Audience Truth',
+  'Strategic Tension',
+  'Opportunity',
+  'Positioning',
+  'Creative Platform',
+  'Messaging Architecture',
+  'Channel Plan',
+  'Launch Phases',
+  'Proof Points',
+  'Risks And Watchouts',
+  'Experiments',
+  'Evidence Table',
+  'Assumptions Table',
+  'Open Questions'
+];
+
+function formatDeliverableSchemaForPrompt() {
+  return `\n\nRequired deliverable schema:\n${REQUIRED_DELIVERABLE_SECTIONS.map(section => `## ${section}`).join('\n')}\n\nEvery section must be present. In Evidence Table, include source title or URL, claim supported, confidence, and relevance. In Assumptions Table, include assumption, why it matters, and validation action.`;
+}
+
 function buildDelegationPrompt(userQuery: string, delegation: NormalizedDelegation, dependencyContext: string, sources: SourceRecord[]) {
   return `${delegation.prompt}\n\nUser request:\n${userQuery}${dependencyContext}${formatSourcesForPrompt(sources)}`;
 }
@@ -571,6 +598,7 @@ function createRunState(objective: string, mode: RunState['mode'], provider: Mod
     startedAt: timestamp,
     updatedAt: timestamp,
     confidence: 'medium',
+    deliverableSections: [],
     evidencePolicy,
     factualClaims,
     assumptions: [],
@@ -584,6 +612,79 @@ function createRunState(objective: string, mode: RunState['mode'], provider: Mod
     traces: [],
     evaluations: []
   };
+}
+
+function extractDeliverableSections(markdown: string, sources: SourceRecord[]): DeliverableSection[] {
+  const sectionMatches = [...markdown.matchAll(/^##\s+(.+)$/gm)];
+  if (sectionMatches.length === 0) {
+    return [{
+      id: 'section-final-output',
+      title: 'Final Output',
+      body: markdown.trim(),
+      status: 'draft',
+      sourceIds: sources.map(source => source.id)
+    }];
+  }
+
+  return sectionMatches.map((match, index) => {
+    const title = match[1].trim();
+    const start = (match.index ?? 0) + match[0].length;
+    const next = sectionMatches[index + 1];
+    const end = next?.index ?? markdown.length;
+    return {
+      id: `section-${sanitizeId(title)}`,
+      title,
+      body: markdown.slice(start, end).trim(),
+      status: REQUIRED_DELIVERABLE_SECTIONS.some(required => required.toLowerCase() === title.toLowerCase()) ? 'draft' : 'needs-revision',
+      sourceIds: sources.filter(source => markdown.slice(start, end).includes(source.title) || (source.url && markdown.slice(start, end).includes(source.url))).map(source => source.id)
+    };
+  });
+}
+
+function createScorecard(runState: RunState, finalAnswer: string, sources: SourceRecord[]): EvaluationScorecard {
+  const requiredPresent = REQUIRED_DELIVERABLE_SECTIONS.filter(section => new RegExp(`^##\\s+${escapeRegExp(section)}\\s*$`, 'im').test(finalAnswer)).length;
+  const evidenceCoverage = runState.evidencePolicy.required ? Math.min(10, Math.round((sources.length / 12) * 10)) : 8;
+  const claimSupport = runState.factualClaims.length === 0 ? 8 : Math.round((runState.factualClaims.filter(claim => claim.status === 'supported').length / runState.factualClaims.length) * 10);
+  const structureScore = Math.round((requiredPresent / REQUIRED_DELIVERABLE_SECTIONS.length) * 10);
+  const hasCreative = /creative platform|creative territory|messaging architecture/i.test(finalAnswer);
+  const hasActions = /experiment|launch phase|channel plan|next/i.test(finalAnswer);
+  const sourceQuality = Math.min(10, Math.max(3, sources.filter(source => source.url).length));
+  const scorecard = {
+    evidenceCoverage,
+    sourceQuality,
+    claimSupport,
+    strategicSharpness: Math.max(4, structureScore),
+    creativeOriginality: hasCreative ? 8 : 5,
+    actionability: hasActions ? 8 : 5,
+    consistency: runState.conflicts.length === 0 ? 8 : 5,
+    overall: 0,
+    notes: [
+      `${requiredPresent}/${REQUIRED_DELIVERABLE_SECTIONS.length} required sections present.`,
+      `${sources.length} sources attached.`,
+      `${runState.factualClaims.filter(claim => claim.status === 'supported').length}/${runState.factualClaims.length} factual claims supported.`
+    ]
+  };
+  scorecard.overall = Math.round((scorecard.evidenceCoverage + scorecard.sourceQuality + scorecard.claimSupport + scorecard.strategicSharpness + scorecard.creativeOriginality + scorecard.actionability + scorecard.consistency) / 7);
+  return scorecard;
+}
+
+function createProjectMemorySnapshot(runState: RunState, sources: SourceRecord[], sections: DeliverableSection[]): ProjectMemorySnapshot {
+  const timestamp = new Date().toISOString();
+  return {
+    id: `project-memory-${runState.id}`,
+    title: runState.objective.slice(0, 72),
+    objective: runState.objective,
+    createdAt: runState.startedAt,
+    updatedAt: timestamp,
+    acceptedClaimIds: runState.factualClaims.filter(claim => claim.status === 'supported').map(claim => claim.id),
+    rejectedClaimIds: [],
+    sourceIds: sources.map(source => source.id),
+    deliverableSectionIds: sections.map(section => section.id)
+  };
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function emitRunState(runState: RunState, options: ExecutionRuntimeOptions) {
@@ -1143,12 +1244,16 @@ ${formatStepResultsForSynthesis(stepResults, synthesisOrder)}
 Based on their findings and your role as Penny (Executive Coordinator), present the final compiled solution to the User. Make it professional, beautifully structured with headings/markdown, and highlight which expert provided which insights.
 Create a complete strategy and creative platform from the research: situation, current/news signals, forecast implications, audience truth, strategic choice, positioning, creative platform, messaging system, channel plan, proof points, risks, and next experiments.
 Use explicit labels for Sourced, Assumed, Recommended, and Needs validation. When evidence is missing but policy required it, state that clearly before recommendations. Cite sources by title or URL where relevant.
+${formatDeliverableSchemaForPrompt()}
 Keep the tone direct and concise, avoiding excessive conversational filler, fluff, or chatty pleasantries.
 `;
 
     const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', `${synthesisPrompt}${formatSourcesForPrompt(allSources)}`, 6144);
     onThinking(secretary.id, false);
-    updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined });
+  const deliverableSections = extractDeliverableSections(finalAnswer, allSources);
+  const scorecard = createScorecard(runState, finalAnswer, allSources);
+  const projectMemory = createProjectMemorySnapshot(runState, allSources, deliverableSections);
+  updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined, deliverableSections, scorecard, projectMemory });
     addTrace(runState, runtimeOptions, {
       type: 'synthesis',
       title: 'Final synthesis complete',
@@ -1422,10 +1527,13 @@ export async function runAuthoredWorkflow(
   updateRunState(runState, runtimeOptions, { status: 'synthesizing', activeStepId: synthesisNode.id });
 
   const workflowOutputs = Object.entries(nodeOutputs).map(([id, output]) => `\n## ${id}\n${output}`).join('\n');
-  const synthesisPrompt = `Synthesize this authored workflow into a polished final output. Create a complete strategy and creative platform from the research: situation, current/news signals, forecast implications, audience truth, strategic choice, positioning, creative platform, messaging system, channel plan, proof points, risks, and next experiments. Use explicit labels for Sourced, Assumed, Recommended, and Needs validation. If evidence is missing but policy required it, state that before recommendations. Cite available sources by title or URL where relevant.\n\nUser request:\n${userQuery}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}${formatResearchBriefForPrompt(runState.researchBrief)}\n\nWorkflow outputs:\n${workflowOutputs}${formatSourcesForPrompt(allSources)}`;
+  const synthesisPrompt = `Synthesize this authored workflow into a polished final output. Create a complete strategy and creative platform from the research: situation, current/news signals, forecast implications, audience truth, strategic choice, positioning, creative platform, messaging system, channel plan, proof points, risks, and next experiments. Use explicit labels for Sourced, Assumed, Recommended, and Needs validation. If evidence is missing but policy required it, state that before recommendations. Cite available sources by title or URL where relevant.${formatDeliverableSchemaForPrompt()}\n\nUser request:\n${userQuery}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}${formatResearchBriefForPrompt(runState.researchBrief)}\n\nWorkflow outputs:\n${workflowOutputs}${formatSourcesForPrompt(allSources)}`;
   const finalAnswer = await callModel(provider, model, manager.systemPrompt || '', synthesisPrompt, 6144);
   onThinking(manager.id, false);
-  updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined });
+  const deliverableSections = extractDeliverableSections(finalAnswer, allSources);
+  const scorecard = createScorecard(runState, finalAnswer, allSources);
+  const projectMemory = createProjectMemorySnapshot(runState, allSources, deliverableSections);
+  updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined, deliverableSections, scorecard, projectMemory });
   addTrace(runState, runtimeOptions, {
     type: 'synthesis',
     title: 'Final synthesis complete',

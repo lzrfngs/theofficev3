@@ -605,6 +605,13 @@ function App() {
     handleSendMessage(`Challenge the latest recommendation as a critical reviewer. Identify weak assumptions, unsupported claims, missing evidence, alternate strategies, and concrete repair steps.\n\nObjective:\n${runState.objective}\n\nLatest output:\n${latestOutput}`, true);
   };
 
+  const handleRefineSection = (sectionId: string) => {
+    if (!runState || isRunning) return;
+    const section = (runState.deliverableSections ?? []).find(item => item.id === sectionId);
+    if (!section) return;
+    handleSendMessage(`Refine only this section of the strategy/creative platform. Preserve the rest of the deliverable unless a dependency is unavoidable. Improve evidence binding, strategic clarity, creative sharpness, and actionability.\n\nObjective:\n${runState.objective}\n\nSection title:\n${section.title}\n\nCurrent section:\n${section.body}\n\nRelevant claims:\n${runState.factualClaims.map(claim => `- ${claim.status}: ${claim.text}`).join('\n') || '- None'}\n\nReturn the revised section plus any source, assumption, or validation notes.`, true);
+  };
+
   const handleExportWorkspace = () => {
     const snapshot = {
       exportedAt: new Date().toISOString(),
@@ -746,6 +753,7 @@ function App() {
                 onRateRun={handleRateRun}
                 onResearchEvidence={handleResearchEvidence}
                 onChallengeOutput={handleChallengeOutput}
+                onRefineSection={handleRefineSection}
               />
             )}
           </div>

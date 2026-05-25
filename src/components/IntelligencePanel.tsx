@@ -11,16 +11,18 @@ interface IntelligencePanelProps {
   onRateRun: (rating: number) => void;
   onResearchEvidence: () => void;
   onChallengeOutput: () => void;
+  onRefineSection: (sectionId: string) => void;
 }
 
 type IntelligenceTab = 'state' | 'knowledge' | 'trace' | 'eval';
 
-export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, evidenceClaims, knowledgeItems, traces, onClear, onRateRun, onResearchEvidence, onChallengeOutput }) => {
+export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, evidenceClaims, knowledgeItems, traces, onClear, onRateRun, onResearchEvidence, onChallengeOutput, onRefineSection }) => {
   const [tab, setTab] = useState<IntelligenceTab>('state');
   const latestEvaluation = runState?.evaluations.at(-1);
   const evidencePolicy = runState?.evidencePolicy ?? { required: false, status: 'not-required' as const, reasons: [], requiredToolIds: [] };
   const factualClaims = runState?.factualClaims ?? [];
   const researchBrief = runState?.researchBrief;
+  const deliverableSections = runState?.deliverableSections ?? [];
   const counts = useMemo(() => ({
     evidence: evidenceClaims.length,
     knowledge: knowledgeItems.length,
@@ -90,6 +92,34 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
               <StateList title="Forecast Signals" items={researchBrief.forecastSignals} />
               <StateList title="Competitive Signals" items={researchBrief.competitiveSignals} />
               <StateList title="Caveats" items={researchBrief.caveats} />
+            </section>
+          )}
+          {runState.scorecard && (
+            <section className="intelligence-card intelligence-card--wide">
+              <h3>Evaluation Scorecard</h3>
+              <div className="score-grid">
+                {Object.entries(runState.scorecard).filter(([key]) => key !== 'notes').map(([key, value]) => (
+                  <div key={key} className="score-pill">
+                    <span>{formatScoreLabel(key)}</span>
+                    <strong>{typeof value === 'number' ? `${value}/10` : ''}</strong>
+                  </div>
+                ))}
+              </div>
+              <StateList title="Score Notes" items={runState.scorecard.notes} />
+            </section>
+          )}
+          {deliverableSections.length > 0 && (
+            <section className="intelligence-card intelligence-card--wide">
+              <h3>Deliverable Sections</h3>
+              {deliverableSections.map(section => (
+                <article key={section.id} className="section-row">
+                  <div>
+                    <strong>{section.title}</strong>
+                    <span>{section.status} · {section.sourceIds.length} linked sources</span>
+                  </div>
+                  <button className="btn btn--secondary btn--sm" type="button" onClick={() => onRefineSection(section.id)}>Refine</button>
+                </article>
+              ))}
             </section>
           )}
           <StateList title="Assumptions" items={runState.assumptions} />
@@ -191,6 +221,10 @@ const Metric: React.FC<{ label: string; value: string }> = ({ label, value }) =>
     <strong>{value}</strong>
   </section>
 );
+
+function formatScoreLabel(value: string) {
+  return value.replace(/([A-Z])/g, ' $1').replace(/^./, character => character.toUpperCase());
+}
 
 const StateList: React.FC<{ title: string; items: string[] }> = ({ title, items }) => (
   <section className="intelligence-card">

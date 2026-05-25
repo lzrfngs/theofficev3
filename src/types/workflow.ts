@@ -62,6 +62,38 @@ export interface ResearchBrief {
   caveats: string[];
 }
 
+export interface DeliverableSection {
+  id: string;
+  title: string;
+  body: string;
+  status: 'draft' | 'accepted' | 'needs-revision';
+  sourceIds: string[];
+}
+
+export interface EvaluationScorecard {
+  evidenceCoverage: number;
+  sourceQuality: number;
+  claimSupport: number;
+  strategicSharpness: number;
+  creativeOriginality: number;
+  actionability: number;
+  consistency: number;
+  overall: number;
+  notes: string[];
+}
+
+export interface ProjectMemorySnapshot {
+  id: string;
+  title: string;
+  objective: string;
+  createdAt: string;
+  updatedAt: string;
+  acceptedClaimIds: string[];
+  rejectedClaimIds: string[];
+  sourceIds: string[];
+  deliverableSectionIds: string[];
+}
+
 export interface EvidenceClaim {
   id: string;
   claim: string;
@@ -147,6 +179,9 @@ export interface RunState {
   summary?: string;
   confidence: ConfidenceLevel;
   researchBrief?: ResearchBrief;
+  deliverableSections: DeliverableSection[];
+  scorecard?: EvaluationScorecard;
+  projectMemory?: ProjectMemorySnapshot;
   evidencePolicy: EvidencePolicy;
   factualClaims: FactualClaim[];
   assumptions: string[];

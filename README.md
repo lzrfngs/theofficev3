@@ -38,6 +38,8 @@ Evidence policy now runs before planning. The app extracts factual claims from t
 
 When evidence is required and no sources are already attached, The Office builds a multi-query evidence pack before specialist execution. The pack searches current news, market research, forecasts/predictions, competitive examples, cultural adoption signals, and GTM strategy patterns, then stores those sources as a research brief. Penny and the specialists receive the brief so strategy and creative platforms can trace recommendations back to current signals, forecast implications, competitive context, caveats, and source snippets.
 
+Final synthesis now targets a fixed strategy and creative platform schema: executive read, evidence base, market truth, audience truth, strategic tension, opportunity, positioning, creative platform, messaging architecture, channel plan, launch phases, proof points, risks, experiments, evidence table, assumptions table, and open questions. The runtime extracts those sections, scores the run for evidence coverage, source quality, claim support, strategic sharpness, creative originality, actionability, and consistency, and stores a project memory snapshot that can travel with exported workspaces. The Run tab lets users refine individual deliverable sections without manually rebuilding the whole workflow.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

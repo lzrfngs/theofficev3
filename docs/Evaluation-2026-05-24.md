@@ -15,6 +15,10 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Final synthesis is instructed to separate sourced facts, assumptions, recommendations, and items needing validation.
 - The Run tab now displays evidence policy, factual claims, research briefs, tool calls, trace records, knowledge, and evaluation data.
 - Repair actions let users trigger follow-up research or challenge the latest output.
+- Final synthesis now targets a fixed strategy and creative platform schema with required sections.
+- The runtime extracts deliverable sections, shows them in the Run tab, and lets users refine a single section.
+- Runs now receive a heuristic scorecard across evidence coverage, source quality, claim support, strategic sharpness, creative originality, actionability, and consistency.
+- Project memory snapshots preserve accepted claims, source ids, and deliverable section ids for exported workspaces.
 
 ## Bug Check Results
 
@@ -33,6 +37,8 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Web search can be triggered by policy, but the tool registry is still runtime-internal rather than a full agent-request protocol.
 - Import/export provides portable persistence, but there is still no backend project database or searchable run history.
 - The critique loop is bounded to keep cost and runaway behavior under control; deeper iterative re-planning will need user controls and budget limits.
+- Scorecards are heuristic and structural; they are not yet model-graded evaluation judgments.
+- Section refinement starts a targeted follow-up run; it does not yet patch the original final output in place.
 
 ## Recommended Next Phase
 

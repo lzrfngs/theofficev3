@@ -904,10 +904,69 @@ button.agent-roster__item {
 
 .knowledge-row,
 .runtime-row,
-.trace-row {
+.trace-row,
+.section-row {
   display: flex;
   gap: var(--space-3);
   min-width: 0;
+}
+
+.section-row {
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line-1);
+}
+
+.section-row:first-of-type {
+  border-top: 0;
+}
+
+.section-row strong,
+.section-row span {
+  display: block;
+}
+
+.section-row strong {
+  color: var(--ink-1);
+  font-size: var(--fs-13);
+}
+
+.section-row span {
+  color: var(--ink-3);
+  font-size: var(--fs-12);
+}
+
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.score-pill {
+  padding: var(--space-3);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line-1);
+}
+
+.score-pill span,
+.score-pill strong {
+  display: block;
+}
+
+.score-pill span {
+  color: var(--ink-3);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+.score-pill strong {
+  margin-top: var(--space-1);
+  color: var(--ink-1);
+  font-size: var(--fs-15);
 }
 
 .knowledge-row + .knowledge-row,
