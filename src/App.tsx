@@ -211,9 +211,9 @@ function App() {
   };
 
   // Handle message sending
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, forceAutomatic = false) => {
     if (isRunning) return;
-    const hasAuthoredFlow = workflowNodes.some(node => node.type === 'agent');
+    const hasAuthoredFlow = !forceAutomatic && workflowNodes.some(node => node.type === 'agent');
     setIsRunning(true);
     setActiveAgent(coordinator.id);
 
@@ -566,6 +566,18 @@ function App() {
     setRunState(prev => prev ? { ...prev, evaluations: [...prev.evaluations, evaluation], updatedAt: evaluation.timestamp } : prev);
   };
 
+  const handleResearchEvidence = () => {
+    if (!runState || isRunning) return;
+    const claims = runState.factualClaims.map(claim => `- ${claim.text}`).join('\n') || '- Identify and verify the factual claims in the current objective.';
+    handleSendMessage(`Research and verify the evidence behind this objective before making recommendations.\n\nObjective:\n${runState.objective}\n\nClaims to verify:\n${claims}\n\nReturn sourced findings, confidence labels, and corrections to assumptions.`, true);
+  };
+
+  const handleChallengeOutput = () => {
+    if (!runState || isRunning) return;
+    const latestOutput = finalOutputs.at(-1)?.text || 'No final output is available yet.';
+    handleSendMessage(`Challenge the latest recommendation as a critical reviewer. Identify weak assumptions, unsupported claims, missing evidence, alternate strategies, and concrete repair steps.\n\nObjective:\n${runState.objective}\n\nLatest output:\n${latestOutput}`, true);
+  };
+
   const handleExportWorkspace = () => {
     const snapshot = {
       exportedAt: new Date().toISOString(),
@@ -705,6 +717,8 @@ function App() {
                 traces={traces}
                 onClear={handleClearRuntimeState}
                 onRateRun={handleRateRun}
+                onResearchEvidence={handleResearchEvidence}
+                onChallengeOutput={handleChallengeOutput}
               />
             )}
           </div>

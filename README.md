@@ -34,6 +34,8 @@ The Run tab exposes the active workflow's structured state: objective, confidenc
 
 Manual sources and agent outputs can be promoted into the shared knowledge pool. Workspace snapshots can be exported/imported as JSON for portable persistence beyond browser localStorage. Settings also support per-agent model overrides so routing, specialist work, and synthesis can use different model choices while keeping the same provider router.
 
+Evidence policy now runs before planning. The app extracts factual claims from the user request, decides whether external evidence is required, and can force a Mira evidence-check before dependent strategy or creative steps. Final synthesis is instructed to label material as sourced, assumed, recommended, or needing validation. The Run tab shows the evidence policy, factual claims, tool calls, and repair actions for follow-up research or critique.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

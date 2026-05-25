@@ -51,7 +51,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
   const isCoordinator = !!onSendMessage;
 
   return (
-    <div className={`agent-card glass-panel ${isActive ? agent.activeClass : ''}`}>
+    <div className={`agent-card glass-panel ${agent.badgeClass} ${isActive ? agent.activeClass : ''}`}>
       {/* Agent Card Header */}
       {isCoordinator ? (
         <div className="agent-header-vertical">
@@ -59,7 +59,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
             {agent.avatar ? (
               <img src={agent.avatar} alt={agent.name} className="portrait-img-full" />
             ) : (
-              <div className="portrait-placeholder-full" style={{ color: agent.color, backgroundColor: 'rgba(255,255,255,0.03)' }}>
+              <div className="portrait-placeholder-full portrait-placeholder--agent">
                 {getInitials(agent.name)}
               </div>
             )}
@@ -67,14 +67,14 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
 
           <div className="agent-meta-vertical flex flex-col gap-3">
             <div className="flex flex-col gap-0.5">
-              <span className="agent-name block text-lg font-serif font-medium leading-tight" style={{ color: agent.color }}>{agent.name}</span>
+              <span className="agent-name block text-lg font-serif font-medium leading-tight">{agent.name}</span>
               <span className="agent-title block text-xs text-slate-400 leading-normal">{agent.title}</span>
             </div>
 
             <div className="flex items-center justify-between border-t border-slate-800/40 pt-2.5">
               <span className={`badge agent-badge ${agent.badgeClass}`}>
                 {isThinking || isCoordinating ? (
-                  <Loader2 className="animate-spin flex-shrink-0" size={10} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                  <Loader2 className="agent-badge__spinner animate-spin flex-shrink-0" size={10} />
                 ) : (
                   <span className={`status-indicator ${isActive ? 'status-active' : 'status-idle'}`} />
                 )}
@@ -84,8 +84,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 {onEditPortrait && (
                   <button
-                    className="btn btn--secondary btn--icon"
-                    style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0 }}
+                    className="btn btn--secondary btn--icon agent-header__icon-button"
                     onClick={onEditPortrait}
                     title="Change Portrait / Local Image"
                     aria-label="Change portrait or local image"
@@ -94,8 +93,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
                   </button>
                 )}
                 <button
-                  className="btn btn--secondary btn--icon"
-                  style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0 }}
+                  className="btn btn--secondary btn--icon agent-header__icon-button"
                   onClick={() => setShowInspector(!showInspector)}
                   title="Inspect Agent System Prompt"
                   aria-label="Inspect agent system prompt"
@@ -112,7 +110,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
             {agent.avatar ? (
               <img src={agent.avatar} alt={agent.name} className="portrait-img" />
             ) : (
-              <div className="portrait-placeholder" style={{ color: agent.color, backgroundColor: 'rgba(255,255,255,0.03)' }}>
+              <div className="portrait-placeholder portrait-placeholder--agent">
                 {getInitials(agent.name)}
               </div>
             )}
@@ -120,12 +118,12 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
 
           <div className="agent-meta">
             <div className="flex items-center justify-between">
-              <span className="agent-name" style={{ color: agent.color }}>{agent.name}</span>
+              <span className="agent-name">{agent.name}</span>
             </div>
             <span className="agent-title">{agent.title}</span>
             <span className={`badge agent-badge ${agent.badgeClass}`}>
               {isThinking || isCoordinating ? (
-                <Loader2 className="animate-spin flex-shrink-0" size={10} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }} />
+                <Loader2 className="agent-badge__spinner animate-spin flex-shrink-0" size={10} />
               ) : (
                 <span className={`status-indicator ${isActive ? 'status-active' : 'status-idle'}`} />
               )}
@@ -136,8 +134,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {onEditPortrait && (
               <button
-                className="btn btn--secondary btn--icon"
-                style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0 }}
+                className="btn btn--secondary btn--icon agent-header__icon-button"
                 onClick={onEditPortrait}
                 title="Change Portrait / Local Image"
                 aria-label="Change portrait or local image"
@@ -146,8 +143,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
               </button>
             )}
             <button
-              className="btn btn--secondary btn--icon"
-              style={{ width: '28px', height: '28px', borderRadius: '50%', padding: 0 }}
+              className="btn btn--secondary btn--icon agent-header__icon-button"
               onClick={() => setShowInspector(!showInspector)}
               title="Inspect Agent System Prompt"
               aria-label="Inspect agent system prompt"
@@ -162,14 +158,14 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
       {showInspector && (
         <div className="inspector-popup glass-panel border border-slate-700/60 shadow-2xl">
           <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
-            <h4 className="font-semibold text-slate-200" style={{ color: agent.color }}>
+            <h4 className="inspector-title font-semibold text-slate-200">
               Training Profile: {agent.name}
             </h4>
             <button className="inspector-close" onClick={() => setShowInspector(false)} title="Close inspector" aria-label="Close inspector">
               <X size={16} />
             </button>
           </div>
-          <div className="text-xs text-slate-400 overflow-y-auto leading-relaxed select-text" style={{ maxHeight: '300px' }}>
+          <div className="inspector-body text-xs text-slate-400 overflow-y-auto leading-relaxed select-text">
             <MarkdownRenderer text={agent.systemPrompt || 'Loading profile instructions...'} />
           </div>
         </div>
@@ -206,9 +202,9 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({
               </div>
               <div className="message-bubble bg-slate-900/40 border border-slate-800/80 rounded-lg">
                 <div className="typing-indicator">
-                  <div className="typing-dot" style={{ backgroundColor: agent.color }}></div>
-                  <div className="typing-dot" style={{ backgroundColor: agent.color }}></div>
-                  <div className="typing-dot" style={{ backgroundColor: agent.color }}></div>
+                  <div className="typing-dot"></div>
+                  <div className="typing-dot"></div>
+                  <div className="typing-dot"></div>
                 </div>
               </div>
             </div>

@@ -9,13 +9,17 @@ interface IntelligencePanelProps {
   traces: ExecutionTraceRecord[];
   onClear: () => void;
   onRateRun: (rating: number) => void;
+  onResearchEvidence: () => void;
+  onChallengeOutput: () => void;
 }
 
 type IntelligenceTab = 'state' | 'knowledge' | 'trace' | 'eval';
 
-export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, evidenceClaims, knowledgeItems, traces, onClear, onRateRun }) => {
+export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, evidenceClaims, knowledgeItems, traces, onClear, onRateRun, onResearchEvidence, onChallengeOutput }) => {
   const [tab, setTab] = useState<IntelligenceTab>('state');
   const latestEvaluation = runState?.evaluations.at(-1);
+  const evidencePolicy = runState?.evidencePolicy ?? { required: false, status: 'not-required' as const, reasons: [], requiredToolIds: [] };
+  const factualClaims = runState?.factualClaims ?? [];
   const counts = useMemo(() => ({
     evidence: evidenceClaims.length,
     knowledge: knowledgeItems.length,
@@ -51,6 +55,31 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
           <section className="intelligence-card intelligence-card--wide">
             <h3>Objective</h3>
             <p>{runState.objective}</p>
+          </section>
+          <section className="intelligence-card intelligence-card--wide">
+            <h3>Evidence Policy</h3>
+            <p>{evidencePolicy.required ? `Required: ${evidencePolicy.status}` : 'Not required'}</p>
+            {evidencePolicy.reasons.length > 0 && (
+              <ul>
+                {evidencePolicy.reasons.map((reason, index) => <li key={`policy-${index}`}>{reason}</li>)}
+              </ul>
+            )}
+            <div className="rating-row">
+              <button className="btn btn--secondary btn--sm" type="button" onClick={onResearchEvidence} disabled={!evidencePolicy.required}>Research evidence</button>
+              <button className="btn btn--secondary btn--sm" type="button" onClick={onChallengeOutput}>Challenge output</button>
+            </div>
+          </section>
+          <section className="intelligence-card intelligence-card--wide">
+            <h3>Factual Claims</h3>
+            {factualClaims.length === 0 ? <p>No factual claims extracted.</p> : factualClaims.map(claim => (
+              <article key={claim.id} className="knowledge-row">
+                <Search size={13} />
+                <div>
+                  <strong>{claim.status} · {claim.confidence}</strong>
+                  <span>{claim.text}</span>
+                </div>
+              </article>
+            ))}
           </section>
           <StateList title="Assumptions" items={runState.assumptions} />
           <StateList title="Open Questions" items={runState.openQuestions} />
@@ -130,6 +159,13 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
                   <CheckCircle2 size={13} /> {rating}
                 </button>
               ))}
+            </div>
+          </section>
+          <section className="intelligence-card intelligence-card--wide">
+            <h3>Repair Actions</h3>
+            <div className="rating-row">
+              <button className="btn btn--secondary btn--sm" type="button" onClick={onResearchEvidence}>Research missing evidence</button>
+              <button className="btn btn--secondary btn--sm" type="button" onClick={onChallengeOutput}>Challenge recommendations</button>
             </div>
           </section>
         </div>

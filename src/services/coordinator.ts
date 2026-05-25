@@ -1,7 +1,9 @@
 import { AGENT_CATALOG } from '../data/agents';
 import type {
   EvidenceClaim,
+  EvidencePolicy,
   ExecutionTraceRecord,
+  FactualClaim,
   KnowledgeItem,
   RunEvaluation,
   RunState,
@@ -100,6 +102,36 @@ const RUNTIME_TOOLS = {
     id: 'knowledge_lookup',
     name: 'Knowledge lookup',
     description: 'Injects saved sources and knowledge into the step prompt.'
+  },
+  claimExtraction: {
+    id: 'claim_extraction',
+    name: 'Claim extraction',
+    description: 'Identifies factual claims in the user request that need verification.'
+  },
+  evidencePolicy: {
+    id: 'evidence_policy',
+    name: 'Evidence policy',
+    description: 'Determines whether external evidence is required before synthesis.'
+  },
+  sourceSummarization: {
+    id: 'source_summarization',
+    name: 'Source summarization',
+    description: 'Condenses source material into reusable knowledge records.'
+  },
+  claimVerification: {
+    id: 'claim_verification',
+    name: 'Claim verification',
+    description: 'Connects claims to sources and confidence labels.'
+  },
+  documentIngestion: {
+    id: 'document_ingestion',
+    name: 'Document ingestion',
+    description: 'Turns user-provided text and source notes into knowledge items.'
+  },
+  repairPlanning: {
+    id: 'repair_planning',
+    name: 'Repair planning',
+    description: 'Creates targeted follow-up steps when critique finds gaps.'
   },
   imageGeneration: {
     id: 'image_generation',
@@ -323,7 +355,101 @@ function buildDelegationPrompt(userQuery: string, delegation: NormalizedDelegati
   return `${delegation.prompt}\n\nUser request:\n${userQuery}${dependencyContext}${formatSourcesForPrompt(sources)}`;
 }
 
-function createRunState(objective: string, mode: RunState['mode'], provider: ModelProvider, model: string): RunState {
+function extractFactualClaims(userQuery: string): FactualClaim[] {
+  const claimPatterns = [
+    /\b(?:is|are|was|were|will be|has|have|had|must|should|can|cannot|can't|won't)\b[^.!?]*(?:[.!?]|$)/gi,
+    /\b(?:latest|current|competitor|competitors|pricing|market|audience|customer|users|launch|gtm|Microsoft|Copilot|OpenAI|Google|Anthropic|Vercel)\b[^.!?]*(?:[.!?]|$)/gi
+  ];
+  const seen = new Set<string>();
+  const claims: FactualClaim[] = [];
+
+  for (const pattern of claimPatterns) {
+    for (const match of userQuery.matchAll(pattern)) {
+      const text = match[0].replace(/\s+/g, ' ').trim().replace(/[.!?]$/, '');
+      if (text.length < 18 || seen.has(text.toLowerCase())) continue;
+      seen.add(text.toLowerCase());
+      claims.push({
+        id: `claim-input-${claims.length + 1}`,
+        text,
+        status: 'needs-research',
+        reason: 'User request contains an external factual or market/product assertion.',
+        sourceIds: [],
+        confidence: 'low'
+      });
+    }
+  }
+
+  return claims.slice(0, 8);
+}
+
+function evaluateEvidencePolicy(userQuery: string, claims: FactualClaim[], sources: SourceRecord[]): EvidencePolicy {
+  const query = userQuery.toLowerCase();
+  const reasons = [
+    claims.length > 0 ? 'The request contains factual claims that affect recommendation quality.' : '',
+    /\b(latest|current|recent|today|now|market|competitor|competitive|pricing|benchmark|users|audience|customer|gtm|launch|microsoft|copilot|super-app|unifying|unified)\b/.test(query)
+      ? 'The request depends on current market, product, audience, or competitive context.'
+      : '',
+    /\b(best|should|recommend|strategy|plan|forecast|trend|risk|opportunity)\b/.test(query)
+      ? 'The output is likely to make recommendations that should distinguish evidence from assumptions.'
+      : ''
+  ].filter(Boolean);
+  const required = reasons.length > 0;
+
+  return {
+    required,
+    status: !required ? 'not-required' : sources.length > 0 ? 'satisfied' : 'required',
+    reasons,
+    requiredToolIds: required ? [RUNTIME_TOOLS.webSearch.id, RUNTIME_TOOLS.claimVerification.id] : []
+  };
+}
+
+function applyEvidenceToClaims(claims: FactualClaim[], sources: SourceRecord[]): FactualClaim[] {
+  if (sources.length === 0) return claims;
+  const sourceIds = sources.map(source => source.id);
+  return claims.map(claim => ({
+    ...claim,
+    status: 'supported',
+    sourceIds,
+    confidence: sources.some(source => source.provider === 'manual') ? 'medium' : 'low'
+  }));
+}
+
+function formatEvidencePolicyForPrompt(policy: EvidencePolicy, claims: FactualClaim[]) {
+  const policyLines = [
+    `Evidence required: ${policy.required ? 'yes' : 'no'}`,
+    `Evidence status: ${policy.status}`,
+    ...policy.reasons.map(reason => `Reason: ${reason}`)
+  ];
+  const claimLines = claims.length === 0 ? ['No explicit factual claims were extracted.'] : claims.map(claim => `- [${claim.status}] ${claim.text} (${claim.reason})`);
+  return `\n\nEvidence policy:\n${policyLines.join('\n')}\n\nFactual claims:\n${claimLines.join('\n')}`;
+}
+
+function ensureEvidenceDelegation(delegations: NormalizedDelegation[], specialists: Agent[], policy: EvidencePolicy, claims: FactualClaim[]): NormalizedDelegation[] {
+  if (!policy.required || policy.status === 'satisfied' || delegations.some(delegation => delegation.agent === 'researcher')) return delegations;
+  const researcher = specialists.find(agent => agent.role === 'researcher');
+  if (!researcher) return delegations;
+
+  const researchStep: NormalizedDelegation = {
+    id: 'evidence-check',
+    agent: researcher.role,
+    label: 'Evidence check',
+    prompt: `Research and verify the factual claims before any final recommendation. Return concise findings, source-backed corrections, and confidence labels.\n\nClaims:\n${claims.map(claim => `- ${claim.text}`).join('\n') || 'Identify any factual claims in the request.'}`,
+    dependsOn: []
+  };
+
+  return [researchStep, ...delegations.map(delegation => ({
+    ...delegation,
+    dependsOn: delegation.dependsOn.length > 0 ? delegation.dependsOn : [researchStep.id]
+  }))];
+}
+
+function shouldSearchForStep(agent: Agent, policy: EvidencePolicy, delegationPrompt: string) {
+  if (agent.role === 'researcher') return true;
+  if (!policy.required) return false;
+  return /\b(research|verify|evidence|source|market|competitor|pricing|audience|benchmark|current|latest|Microsoft|Copilot)\b/i.test(delegationPrompt);
+}
+
+function createRunState(objective: string, mode: RunState['mode'], provider: ModelProvider, model: string, evidencePolicy: EvidencePolicy, factualClaims: FactualClaim[]): RunState {
   const timestamp = new Date().toISOString();
   return {
     id: `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
@@ -335,6 +461,8 @@ function createRunState(objective: string, mode: RunState['mode'], provider: Mod
     startedAt: timestamp,
     updatedAt: timestamp,
     confidence: 'medium',
+    evidencePolicy,
+    factualClaims,
     assumptions: [],
     openQuestions: [],
     decisions: [],
@@ -504,8 +632,20 @@ export async function runMultiAgentPipeline(
   // Helper to generate timestamps
   const getTimestamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const uuid = () => Math.random().toString(36).substring(2, 9);
-  const runState = createRunState(userQuery, 'automatic', provider, model);
+  const factualClaims = extractFactualClaims(userQuery);
+  let evidencePolicy = evaluateEvidencePolicy(userQuery, factualClaims, existingSources);
+  const runState = createRunState(userQuery, 'automatic', provider, model, evidencePolicy, factualClaims);
   emitRunState(runState, runtimeOptions);
+  addTrace(runState, runtimeOptions, {
+    type: 'tool-call',
+    title: RUNTIME_TOOLS.claimExtraction.name,
+    detail: factualClaims.length > 0 ? factualClaims.map(claim => claim.text).join('\n') : 'No explicit factual claims extracted.'
+  });
+  addTrace(runState, runtimeOptions, {
+    type: 'tool-call',
+    title: RUNTIME_TOOLS.evidencePolicy.name,
+    detail: evidencePolicy.required ? evidencePolicy.reasons.join('\n') : 'Evidence is not required for this request.'
+  });
 
   try {
     // --- Step 1: Penny analyzes the request and delegates tasks ---
@@ -521,15 +661,17 @@ ${specialists.map(agent => `   - ${agent.name} (${agent.role}): ${agent.title}`)
 2. Write a JSON structure indicating which workflow steps you want to run, which agent owns each step, what prompt to send, and any dependencies between steps.
 3. Use this deterministic routing prior as evidence, then apply judgment:
 ${routingHintText}
-4. EXERCISE WISDOM: Do NOT automatically consult all agents. Selectively consult ONLY the specialist(s) that are relevant to the query (between 1 and 4 agents).
+4. Apply the evidence policy. If evidence is required, include Mira/researcher or depend on the automatic evidence-check step before making claims.
+${formatEvidencePolicyForPrompt(evidencePolicy, factualClaims)}
+5. EXERCISE WISDOM: Do NOT automatically consult all agents. Selectively consult ONLY the specialist(s) that are relevant to the query (between 1 and 4 agents).
   - If a specialist's title and role are irrelevant, omit that specialist.
   - If the request is pure coding, API design, setup, or systems architecture, prioritize technical agents.
   - If the request is creative writing, branding, advertising, or campaign work, prioritize creative agents.
   - If user research, demographics, culture, or behavior are irrelevant, omit cultural research agents.
   - If business strategy, SWOT, pricing, or OKRs are irrelevant, omit strategy agents.
-5. You may use the same specialist more than once if the work naturally loops back to them. Each repeated appearance must be a separate delegation with a unique id.
-6. If a step depends on another step, put the prior step id in dependsOn. Later steps will receive dependency outputs at runtime.
-7. Provide a very concise status message in the 'response' field outlining your plan to the user. Avoid pleasantries, chit-chat, or filler text. Start directly with the plan, state exactly which agents you are consulting and why (in a short sentence), and end with: "Working with the other agents now..."
+6. You may use the same specialist more than once if the work naturally loops back to them. Each repeated appearance must be a separate delegation with a unique id.
+7. If a step depends on another step, put the prior step id in dependsOn. Later steps will receive dependency outputs at runtime.
+8. Provide a very concise status message in the 'response' field outlining your plan to the user. Avoid pleasantries, chit-chat, or filler text. Start directly with the plan, state exactly which agents you are consulting and why (in a short sentence), and end with: "Working with the other agents now..."
 
 Your response MUST be valid JSON in this exact format:
 {
@@ -554,7 +696,8 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
     const plan = extractPlannerJson(planTextRaw) ?? fallbackPlan;
 
     const normalizedDelegations = normalizeDelegations(plan.delegations, activeAgents);
-    const executableDelegations = normalizedDelegations.length > 0 ? normalizedDelegations : normalizeDelegations(fallbackPlan.delegations, activeAgents);
+    const baseDelegations = normalizedDelegations.length > 0 ? normalizedDelegations : normalizeDelegations(fallbackPlan.delegations, activeAgents);
+    const executableDelegations = ensureEvidenceDelegation(baseDelegations, specialists, evidencePolicy, factualClaims);
     const executionOrder = sortDelegationsByDependencies(executableDelegations);
     const synthesisOrder = [...executionOrder];
     const workflow = createWorkflowPlan(userQuery, secretary, activeAgents, executableDelegations);
@@ -608,7 +751,7 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       // Fetch prompt
       try {
         let runSources = allSources;
-        if (targetAgent.role === 'researcher') {
+        if (shouldSearchForStep(targetAgent, evidencePolicy, delegation.prompt)) {
           const toolCall = addToolCall(runState, runtimeOptions, {
             toolId: RUNTIME_TOOLS.webSearch.id,
             toolName: RUNTIME_TOOLS.webSearch.name,
@@ -626,9 +769,12 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
             runtimeOptions.onKnowledgeItems?.(knowledgeItems);
             runtimeOptions.onEvidenceClaims?.(evidenceClaims);
             updateRunState(runState, runtimeOptions, {
+              factualClaims: applyEvidenceToClaims(runState.factualClaims, foundSources),
               knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, knowledgeItems.map(item => item.id)),
               evidenceClaimIds: mergeUnique(runState.evidenceClaimIds, evidenceClaims.map(claim => claim.id))
             });
+            evidencePolicy = evaluateEvidencePolicy(userQuery, runState.factualClaims, allSources);
+            updateRunState(runState, runtimeOptions, { evidencePolicy });
           }
           updateToolCall(runState, runtimeOptions, toolCall.id, {
             status: foundSources.length > 0 ? 'complete' : 'error',
@@ -644,7 +790,7 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
           });
         }
         const dependencyContext = formatDependencyContext(delegation, stepResults);
-        const prompt = buildDelegationPrompt(userQuery, delegation, dependencyContext, runSources);
+        const prompt = `${buildDelegationPrompt(userQuery, delegation, dependencyContext, runSources)}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}\n\nWhen making factual claims, label them as sourced, assumed, or needing validation.`;
         const subResult = await callModel(provider, stepModel, targetAgent.systemPrompt || '', prompt);
         stepResults[delegation.id] = {
           id: delegation.id,
@@ -707,6 +853,10 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       onThinking(targetAgent.id, false);
     }
 
+    evidencePolicy = evaluateEvidencePolicy(userQuery, runState.factualClaims, allSources);
+    if (evidencePolicy.required && allSources.length === 0) evidencePolicy = { ...evidencePolicy, status: 'missing' };
+    updateRunState(runState, runtimeOptions, { evidencePolicy });
+
     // --- Step 2b: Penny critiques the run and may request one targeted repair pass ---
     updateRunState(runState, runtimeOptions, { status: 'critiquing', activeStepId: undefined });
     onThinking(secretary.id, true);
@@ -715,6 +865,8 @@ Review the current run state and specialist outputs. Decide whether the answer i
 
 User objective:
 ${userQuery}
+
+${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}
 
 Current outputs:
 ${formatStepResultsForSynthesis(stepResults, executionOrder)}
@@ -832,11 +984,13 @@ Use additionalDelegations only when a concrete missing pass would materially imp
 The team has finished their sub-tasks for this objective:
 ${userQuery}
 
+${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}
+
 Execution trace:
 ${formatStepResultsForSynthesis(stepResults, synthesisOrder)}
 
 Based on their findings and your role as Penny (Executive Coordinator), present the final compiled solution to the User. Make it professional, beautifully structured with headings/markdown, and highlight which expert provided which insights.
-When sources are available, cite them by title or URL where relevant and distinguish sourced facts from recommendations.
+Use explicit labels for Sourced, Assumed, Recommended, and Needs validation. When evidence is missing but policy required it, state that clearly before recommendations. Cite sources by title or URL where relevant.
 Keep the tone direct and concise, avoiding excessive conversational filler, fluff, or chatty pleasantries.
 `;
 
@@ -909,8 +1063,20 @@ export async function runAuthoredWorkflow(
   const uuid = () => Math.random().toString(36).substring(2, 9);
   const nodeOutputs: Record<string, string> = {};
   let allSources = [...existingSources];
-  const runState = createRunState(userQuery, 'authored', provider, model);
+  const factualClaims = extractFactualClaims(userQuery);
+  let evidencePolicy = evaluateEvidencePolicy(userQuery, factualClaims, existingSources);
+  const runState = createRunState(userQuery, 'authored', provider, model, evidencePolicy, factualClaims);
   emitRunState(runState, runtimeOptions);
+  addTrace(runState, runtimeOptions, {
+    type: 'tool-call',
+    title: RUNTIME_TOOLS.claimExtraction.name,
+    detail: factualClaims.length > 0 ? factualClaims.map(claim => claim.text).join('\n') : 'No explicit factual claims extracted.'
+  });
+  addTrace(runState, runtimeOptions, {
+    type: 'tool-call',
+    title: RUNTIME_TOOLS.evidencePolicy.name,
+    detail: evidencePolicy.required ? evidencePolicy.reasons.join('\n') : 'Evidence is not required for this request.'
+  });
   updateRunState(runState, runtimeOptions, { status: 'executing' });
   addTrace(runState, runtimeOptions, {
     type: 'plan',
@@ -956,7 +1122,7 @@ export async function runAuthoredWorkflow(
 
     const defaultPrompt = `Contribute your ${agent.title} expertise to this workflow.`;
     let runSources = allSources;
-    if (agent.role === 'researcher') {
+    if (shouldSearchForStep(agent, evidencePolicy, node.prompt || defaultPrompt)) {
       const toolCall = addToolCall(runState, runtimeOptions, {
         toolId: RUNTIME_TOOLS.webSearch.id,
         toolName: RUNTIME_TOOLS.webSearch.name,
@@ -974,9 +1140,12 @@ export async function runAuthoredWorkflow(
         runtimeOptions.onKnowledgeItems?.(knowledgeItems);
         runtimeOptions.onEvidenceClaims?.(evidenceClaims);
         updateRunState(runState, runtimeOptions, {
+          factualClaims: applyEvidenceToClaims(runState.factualClaims, foundSources),
           knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, knowledgeItems.map(item => item.id)),
           evidenceClaimIds: mergeUnique(runState.evidenceClaimIds, evidenceClaims.map(claim => claim.id))
         });
+        evidencePolicy = evaluateEvidencePolicy(userQuery, runState.factualClaims, allSources);
+        updateRunState(runState, runtimeOptions, { evidencePolicy });
       }
       updateToolCall(runState, runtimeOptions, toolCall.id, {
         status: foundSources.length > 0 ? 'complete' : 'error',
@@ -992,7 +1161,7 @@ export async function runAuthoredWorkflow(
       });
     }
 
-    const prompt = `${node.prompt || defaultPrompt}\n\nUser request:\n${userQuery}\n\n${upstreamContext ? `Upstream context:\n${upstreamContext}` : ''}${formatSourcesForPrompt(runSources)}`;
+    const prompt = `${node.prompt || defaultPrompt}\n\nUser request:\n${userQuery}\n\n${upstreamContext ? `Upstream context:\n${upstreamContext}` : ''}${formatSourcesForPrompt(runSources)}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}\n\nWhen making factual claims, label them as sourced, assumed, or needing validation.`;
 
     try {
       const output = await callModel(provider, stepModel, agent.systemPrompt || '', prompt);
@@ -1032,6 +1201,10 @@ export async function runAuthoredWorkflow(
     }
   }
 
+  evidencePolicy = evaluateEvidencePolicy(userQuery, runState.factualClaims, allSources);
+  if (evidencePolicy.required && allSources.length === 0) evidencePolicy = { ...evidencePolicy, status: 'missing' };
+  updateRunState(runState, runtimeOptions, { evidencePolicy });
+
   updateRunState(runState, runtimeOptions, { status: 'critiquing', activeStepId: undefined });
   const authoredEvaluation: RunEvaluation = {
     id: `eval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
@@ -1058,7 +1231,7 @@ export async function runAuthoredWorkflow(
   updateRunState(runState, runtimeOptions, { status: 'synthesizing', activeStepId: synthesisNode.id });
 
   const workflowOutputs = Object.entries(nodeOutputs).map(([id, output]) => `\n## ${id}\n${output}`).join('\n');
-  const synthesisPrompt = `Synthesize this authored workflow into a polished final output. Cite available sources by title or URL where relevant.\n\nUser request:\n${userQuery}\n\nWorkflow outputs:\n${workflowOutputs}${formatSourcesForPrompt(allSources)}`;
+  const synthesisPrompt = `Synthesize this authored workflow into a polished final output. Use explicit labels for Sourced, Assumed, Recommended, and Needs validation. If evidence is missing but policy required it, state that before recommendations. Cite available sources by title or URL where relevant.\n\nUser request:\n${userQuery}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}\n\nWorkflow outputs:\n${workflowOutputs}${formatSourcesForPrompt(allSources)}`;
   const finalAnswer = await callModel(provider, model, manager.systemPrompt || '', synthesisPrompt, 6144);
   onThinking(manager.id, false);
   updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined });

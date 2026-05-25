@@ -4,6 +4,8 @@ export type RunStatus = 'idle' | 'planning' | 'executing' | 'critiquing' | 'synt
 export type RunMode = 'automatic' | 'authored';
 export type ConfidenceLevel = 'low' | 'medium' | 'high';
 export type EvidenceProvider = 'manual' | 'tavily' | 'exa' | 'brave' | 'bing' | 'model' | 'knowledge';
+export type ClaimStatus = 'unverified' | 'needs-research' | 'supported' | 'assumption';
+export type EvidencePolicyStatus = 'not-required' | 'required' | 'satisfied' | 'missing';
 
 export interface WorkflowCanvasNode {
   id: string;
@@ -44,8 +46,25 @@ export interface EvidenceClaim {
   claim: string;
   sourceIds: string[];
   confidence: ConfidenceLevel;
+  status?: ClaimStatus;
   usedBy?: string;
   timestamp: string;
+}
+
+export interface FactualClaim {
+  id: string;
+  text: string;
+  status: ClaimStatus;
+  reason: string;
+  sourceIds: string[];
+  confidence: ConfidenceLevel;
+}
+
+export interface EvidencePolicy {
+  required: boolean;
+  status: EvidencePolicyStatus;
+  reasons: string[];
+  requiredToolIds: string[];
 }
 
 export interface KnowledgeItem {
@@ -106,6 +125,8 @@ export interface RunState {
   activeStepId?: string;
   summary?: string;
   confidence: ConfidenceLevel;
+  evidencePolicy: EvidencePolicy;
+  factualClaims: FactualClaim[];
   assumptions: string[];
   openQuestions: string[];
   decisions: string[];
