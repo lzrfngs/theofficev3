@@ -96,6 +96,11 @@ body {
   border-radius: var(--r-md);
 }
 
+.workspace-model-badge--warning {
+  color: var(--danger) !important;
+  border-color: color-mix(in oklch, var(--danger), transparent 45%) !important;
+}
+
 .footer-actions {
   gap: var(--space-2);
 }
@@ -970,6 +975,13 @@ button.agent-roster__item {
   gap: var(--space-2);
   color: var(--ink-2);
   font-size: var(--fs-12);
+}
+
+.settings-warning {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-12);
+  line-height: 1.35;
 }
 
 .agent-profile-popover {

@@ -169,7 +169,10 @@ async function callAzureOpenAI(request: Required<GenerateRequest>) {
   const apiKey = process.env.AZURE_OPENAI_API_KEY;
   const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
   const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2025-01-01-preview';
-  if (!apiKey || !endpoint) throw new Error('Missing AZURE_OPENAI_API_KEY or AZURE_OPENAI_ENDPOINT');
+  if (!apiKey || !endpoint) {
+    const missing = [!apiKey && 'AZURE_OPENAI_API_KEY', !endpoint && 'AZURE_OPENAI_ENDPOINT'].filter(Boolean).join(', ');
+    throw new Error(`Azure OpenAI is selected but not configured. Missing: ${missing}. Choose a configured provider in Settings or add these env vars in Vercel and redeploy.`);
+  }
 
   const deployment = process.env.AZURE_OPENAI_DEPLOYMENT || request.model;
   const cleanEndpoint = endpoint.replace(/\/$/, '');

@@ -58,6 +58,8 @@ npm run dev
 
 Vite runs local middleware for `/api/generate` and `/api/search`, so the normal dev server can exercise the same server-side router shape used on Vercel. Add local provider keys to `.env` when testing live model calls, for example `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GITHUB_MODELS_TOKEN`, or `TAVILY_API_KEY`.
 
+The app checks `/api/providers` at startup and in Settings. If a saved browser provider is not configured on the server, the UI warns you and falls back to the first configured provider when possible. Azure OpenAI requires both `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT`; `AZURE_OPENAI_DEPLOYMENT` is used as the default model/deployment when present.
+
 ## Build
 
 ```bash

@@ -14,7 +14,7 @@ import { WorkflowCanvas } from './components/WorkflowCanvas';
 import { OutputPanel } from './components/OutputPanel';
 import { SourcesPanel } from './components/SourcesPanel';
 import { IntelligencePanel } from './components/IntelligencePanel';
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsModal, type ProviderStatus } from './components/SettingsModal';
 import { EditProfileModal } from './components/EditProfileModal';
 
 type WorkspaceView = 'canvas' | 'output' | 'sources' | 'intelligence';
@@ -71,6 +71,7 @@ function App() {
   const [evidenceClaims, setEvidenceClaims] = useState<EvidenceClaim[]>(() => loadStoredJson(storageKeys.evidenceClaims, []));
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(() => loadStoredJson(storageKeys.knowledgeItems, []));
   const [stepModelOverrides, setStepModelOverrides] = useState<Record<string, string>>(() => loadStoredJson(storageKeys.stepModelOverrides, {}));
+  const [providerStatuses, setProviderStatuses] = useState<ProviderStatus[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => (localStorage.getItem(storageKeys.workspaceView) as WorkspaceView | null) || 'canvas');
   const [profileAgentId, setProfileAgentId] = useState<string | null>(null);
@@ -146,6 +147,31 @@ function App() {
     localStorage.setItem(storageKeys.workspaceView, workspaceView);
   }, [workspaceView]);
 
+  useEffect(() => {
+    const loadProviderStatuses = async () => {
+      try {
+        const response = await fetch('/api/providers');
+        if (!response.ok) return;
+        const data = await response.json() as { providers?: ProviderStatus[]; preferredProvider?: ModelProvider; preferredModel?: string };
+        const statuses = data.providers ?? [];
+        setProviderStatuses(statuses);
+        const activeStatus = statuses.find(status => status.provider === provider);
+        if (activeStatus && !activeStatus.configured) {
+          const fallback = statuses.find(status => status.configured);
+          if (fallback) {
+            setProvider(fallback.provider);
+            setModel(fallback.defaultModel);
+            localStorage.setItem('model_provider', fallback.provider);
+            localStorage.setItem('model_name', fallback.defaultModel);
+          }
+        }
+      } catch (error) {
+        console.warn('Provider status check failed', error);
+      }
+    };
+    loadProviderStatuses();
+  }, [provider]);
+
 
   // Load Agent profiles from docs/agents/*.md on mount
   useEffect(() => {
@@ -173,6 +199,7 @@ function App() {
   const profileAgent = profileAgentId ? agents.find(agent => agent.id === profileAgentId) : null;
   const selectedNode = selectedNodeId ? workflowNodes.find(node => node.id === selectedNodeId) : null;
   const selectedEdge = selectedEdgeId ? workflowEdges.find(edge => edge.id === selectedEdgeId) : null;
+  const activeProviderStatus = providerStatuses.find(status => status.provider === provider);
 
   const appendUniqueById = <T extends { id: string }>(setter: Dispatch<SetStateAction<T[]>>, items: T[]) => {
     setter(prev => {
@@ -727,9 +754,9 @@ function App() {
 
       {/* Footer bar styled using Vellum navbar concept */}
       <footer className="footer-bar">
-        <div className="workspace-model-badge badge badge--dot bg-slate-900/40">
+        <div className={`workspace-model-badge badge badge--dot bg-slate-900/40 ${activeProviderStatus && !activeProviderStatus.configured ? 'workspace-model-badge--warning' : ''}`}>
           <span className="flex items-center gap-1 text-slate-300 font-medium">
-            {provider} / {model}
+            {provider} / {model}{activeProviderStatus && !activeProviderStatus.configured ? ' / missing env' : ''}
           </span>
         </div>
 
@@ -798,6 +825,7 @@ function App() {
         model={model}
         agents={agents}
         stepModelOverrides={stepModelOverrides}
+        providerStatuses={providerStatuses}
         onSave={handleSaveSettings}
       />
 

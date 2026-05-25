@@ -2,11 +2,19 @@ import React, { useState } from 'react';
 import { X, Cpu, HelpCircle, Route } from 'lucide-react';
 import type { Agent, ModelProvider } from '../services/coordinator';
 
+export interface ProviderStatus {
+  provider: ModelProvider;
+  configured: boolean;
+  missing: string[];
+  defaultModel: string;
+}
+
 interface SettingsModalProps {
   provider: ModelProvider;
   model: string;
   agents: Agent[];
   stepModelOverrides: Record<string, string>;
+  providerStatuses: ProviderStatus[];
   isOpen: boolean;
   onClose: () => void;
   onSave: (provider: ModelProvider, model: string, stepModelOverrides: Record<string, string>) => void;
@@ -17,6 +25,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   model,
   agents,
   stepModelOverrides,
+  providerStatuses,
   isOpen,
   onClose,
   onSave
@@ -34,6 +43,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const providerModels = getProviderModels(providerSelect);
+  const selectedProviderStatus = providerStatuses.find(status => status.provider === providerSelect);
 
   return (
     <div className="modal-overlay">
@@ -65,12 +75,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 setModelSelect(getProviderModels(nextProvider)[0]);
               }}
             >
-              <option value="gemini">Gemini</option>
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="azure-openai">Azure OpenAI</option>
-              <option value="github-models">GitHub Models</option>
+              {getProviderOptions(providerStatuses).map(option => (
+                <option key={option.provider} value={option.provider}>
+                  {option.label}{option.configured ? '' : ' (missing env)'}
+                </option>
+              ))}
             </select>
+            {selectedProviderStatus && !selectedProviderStatus.configured && (
+              <p className="settings-warning">Missing server env: {selectedProviderStatus.missing.join(' or ')}</p>
+            )}
           </div>
 
           {/* Model Selection */}
@@ -124,7 +137,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <HelpCircle size={16} className="text-slate-500 shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-slate-300 mb-0.5">How it works</p>
-              <p>The office now calls a server-side model router. Put provider keys in Vercel environment variables, then choose the provider and model here.</p>
+              <p>The office calls a server-side model router. Choose a configured provider; missing provider keys must be added in Vercel environment variables, then redeployed.</p>
             </div>
           </div>
         </div>
@@ -144,6 +157,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
 function cleanOverrides(overrides: Record<string, string>) {
   return Object.fromEntries(Object.entries(overrides).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value));
+}
+
+function getProviderOptions(statuses: ProviderStatus[]) {
+  const fallback = [
+    { provider: 'gemini' as const, configured: true, missing: [], defaultModel: 'gemini-3.5-flash' },
+    { provider: 'openai' as const, configured: true, missing: [], defaultModel: 'gpt-5.4' },
+    { provider: 'anthropic' as const, configured: true, missing: [], defaultModel: 'claude-opus-4-6' },
+    { provider: 'azure-openai' as const, configured: true, missing: [], defaultModel: 'gpt-4.1' },
+    { provider: 'github-models' as const, configured: true, missing: [], defaultModel: 'openai/gpt-5.4' }
+  ];
+  const source = statuses.length > 0 ? statuses : fallback;
+  return source.map(status => ({ ...status, label: getProviderLabel(status.provider) }));
+}
+
+function getProviderLabel(provider: ModelProvider) {
+  if (provider === 'gemini') return 'Gemini';
+  if (provider === 'openai') return 'OpenAI';
+  if (provider === 'anthropic') return 'Anthropic';
+  if (provider === 'azure-openai') return 'Azure OpenAI';
+  return 'GitHub Models';
 }
 
 function getProviderModels(provider: ModelProvider) {
