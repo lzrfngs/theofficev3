@@ -36,12 +36,30 @@ export interface SourceRecord {
   title: string;
   url?: string;
   snippet: string;
+  fullText?: string;
+  summary?: string;
+  chunks?: SourceChunk[];
   query?: string;
   category?: EvidenceCategory;
   publishedDate?: string;
   provider: EvidenceProvider;
   usedBy?: string;
   timestamp: string;
+}
+
+export interface SourceChunk {
+  id: string;
+  text: string;
+  index: number;
+}
+
+export interface ClaimSourceMatch {
+  claimId: string;
+  sourceId: string;
+  chunkId?: string;
+  score: number;
+  quote: string;
+  verdict: 'supports' | 'contradicts' | 'related';
 }
 
 export interface ResearchQuery {
@@ -110,6 +128,7 @@ export interface FactualClaim {
   status: ClaimStatus;
   reason: string;
   sourceIds: string[];
+  matches?: ClaimSourceMatch[];
   confidence: ConfidenceLevel;
 }
 
@@ -141,6 +160,15 @@ export interface ToolCallRecord {
   outputSummary?: string;
   sourceIds?: string[];
   timestamp: string;
+}
+
+export interface ProjectLibrary {
+  id: string;
+  name: string;
+  updatedAt: string;
+  memories: ProjectMemorySnapshot[];
+  sources: SourceRecord[];
+  acceptedClaims: FactualClaim[];
 }
 
 export interface ExecutionTraceRecord {
@@ -182,6 +210,7 @@ export interface RunState {
   deliverableSections: DeliverableSection[];
   scorecard?: EvaluationScorecard;
   projectMemory?: ProjectMemorySnapshot;
+  projectLibrary?: ProjectLibrary;
   evidencePolicy: EvidencePolicy;
   factualClaims: FactualClaim[];
   assumptions: string[];

@@ -40,6 +40,8 @@ When evidence is required and no sources are already attached, The Office builds
 
 Final synthesis now targets a fixed strategy and creative platform schema: executive read, evidence base, market truth, audience truth, strategic tension, opportunity, positioning, creative platform, messaging architecture, channel plan, launch phases, proof points, risks, experiments, evidence table, assumptions table, and open questions. The runtime extracts those sections, scores the run for evidence coverage, source quality, claim support, strategic sharpness, creative originality, actionability, and consistency, and stores a project memory snapshot that can travel with exported workspaces. The Run tab lets users refine individual deliverable sections without manually rebuilding the whole workflow.
 
+Source grounding now includes `/api/ingest`, which fetches readable text from source URLs or user-provided text, cleans it, chunks it, and stores summaries on source records. Factual claims are matched against source chunks with support scores and quotes. Final scorecards can be model-graded with a heuristic fallback, and completed runs create a portable project library containing memories, accepted claims, and enriched sources.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

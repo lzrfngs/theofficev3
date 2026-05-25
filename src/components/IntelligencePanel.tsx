@@ -80,6 +80,9 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
                 <div>
                   <strong>{claim.status} · {claim.confidence}</strong>
                   <span>{claim.text}</span>
+                  {claim.matches && claim.matches.length > 0 && (
+                    <small>{claim.matches.length} source matches · best score {claim.matches[0].score}/1</small>
+                  )}
                 </div>
               </article>
             ))}
@@ -139,6 +142,12 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
               </article>
             ))}
           </section>
+          {runState.projectLibrary && (
+            <section className="intelligence-card intelligence-card--wide">
+              <h3>Project Memory</h3>
+              <p>{runState.projectLibrary.sources.length} saved sources · {runState.projectLibrary.acceptedClaims.length} accepted claims · {runState.projectLibrary.memories.length} memory snapshot</p>
+            </section>
+          )}
         </div>
       ) : tab === 'knowledge' ? (
         <div className="intelligence-list">

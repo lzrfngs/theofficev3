@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import generateHandler from './api/generate'
+import ingestHandler from './api/ingest'
 import providersHandler from './api/providers'
 import searchHandler from './api/search'
 
@@ -30,6 +31,7 @@ function localApiPlugin(): Plugin {
     name: 'the-office-local-api',
     configureServer(server) {
       server.middlewares.use('/api/generate', createLocalApiMiddleware(generateHandler));
+      server.middlewares.use('/api/ingest', createLocalApiMiddleware(ingestHandler));
       server.middlewares.use('/api/providers', createLocalApiMiddleware(providersHandler));
       server.middlewares.use('/api/search', createLocalApiMiddleware(searchHandler));
     }

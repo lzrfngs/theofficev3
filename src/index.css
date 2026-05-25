@@ -1118,6 +1118,14 @@ button.agent-roster__item {
   font-size: var(--fs-13);
 }
 
+.knowledge-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
 .knowledge-row span,
 .runtime-row span {
   display: -webkit-box;

@@ -7,8 +7,10 @@ import type {
   ExecutionTraceRecord,
   FactualClaim,
   KnowledgeItem,
+  ProjectLibrary,
   DeliverableSection,
   ProjectMemorySnapshot,
+  SourceChunk,
   ResearchBrief,
   ResearchQuery,
   RunEvaluation,
@@ -104,6 +106,14 @@ interface SearchOptions {
   searchDepth?: 'basic' | 'advanced';
   topic?: 'general' | 'news';
   days?: number;
+}
+
+interface IngestResult {
+  title: string;
+  url?: string;
+  text: string;
+  summary: string;
+  chunks: SourceChunk[];
 }
 
 const RUNTIME_TOOLS = {
@@ -242,6 +252,37 @@ async function searchWeb(query: string, usedBy: string, options: SearchOptions =
     usedBy,
     timestamp: new Date().toISOString()
   }));
+}
+
+async function ingestSource(source: SourceRecord): Promise<SourceRecord> {
+  if (!source.url && !source.snippet) return source;
+
+  try {
+    const response = await fetch('/api/ingest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: source.url, title: source.title, text: source.url ? undefined : source.snippet, maxChars: 28000 })
+    });
+    if (!response.ok) return source;
+    const data = await readJsonResponse<IngestResult>(response, 'source ingestion');
+    return {
+      ...source,
+      fullText: data.text,
+      summary: data.summary,
+      chunks: data.chunks,
+      snippet: data.summary || source.snippet
+    };
+  } catch {
+    return source;
+  }
+}
+
+async function enrichSources(sources: SourceRecord[]): Promise<SourceRecord[]> {
+  const enriched: SourceRecord[] = [];
+  for (const source of sources.slice(0, 10)) {
+    enriched.push(await ingestSource(source));
+  }
+  return [...enriched, ...sources.slice(10)];
 }
 
 async function readJsonResponse<T>(response: Response, label: string): Promise<T> {
@@ -517,7 +558,7 @@ async function buildEvidencePack(userQuery: string, claims: FactualClaim[], used
     }
   }
 
-  const sources = [...sourceMap.values()].slice(0, 18);
+  const sources = await enrichSources([...sourceMap.values()].slice(0, 18));
   const brief: ResearchBrief = {
     id: `research-brief-${Date.now().toString(36)}`,
     generatedAt: new Date().toISOString(),
@@ -542,13 +583,53 @@ function summarizeSourcesByCategory(sources: SourceRecord[], categories: Evidenc
 
 function applyEvidenceToClaims(claims: FactualClaim[], sources: SourceRecord[]): FactualClaim[] {
   if (sources.length === 0) return claims;
-  const sourceIds = sources.map(source => source.id);
-  return claims.map(claim => ({
-    ...claim,
-    status: 'supported',
-    sourceIds,
-    confidence: sources.some(source => source.provider === 'manual') ? 'medium' : 'low'
-  }));
+  return claims.map(claim => {
+    const matches = matchClaimToSources(claim, sources);
+    return {
+      ...claim,
+      status: matches.some(match => match.verdict === 'supports' && match.score >= 0.3) ? 'supported' : 'needs-research',
+      sourceIds: matches.map(match => match.sourceId),
+      matches,
+      confidence: matches.some(match => match.score >= 0.55) ? 'high' : matches.length > 0 ? 'medium' : 'low'
+    };
+  });
+}
+
+function matchClaimToSources(claim: FactualClaim, sources: SourceRecord[]) {
+  const claimTerms = extractKeyTerms(claim.text);
+  return sources
+    .flatMap(source => {
+      const chunks = source.chunks && source.chunks.length > 0 ? source.chunks : [{ id: `${source.id}-snippet`, text: `${source.title}. ${source.snippet}`, index: 0 }];
+      return chunks.map(chunk => {
+        const chunkTerms = extractKeyTerms(chunk.text);
+        const overlap = claimTerms.filter(term => chunkTerms.includes(term));
+        const score = claimTerms.length === 0 ? 0 : overlap.length / claimTerms.length;
+        return {
+          claimId: claim.id,
+          sourceId: source.id,
+          chunkId: chunk.id,
+          score: Math.round(score * 100) / 100,
+          quote: getBestQuote(chunk.text, overlap),
+          verdict: score >= 0.2 ? 'supports' as const : 'related' as const
+        };
+      });
+    })
+    .filter(match => match.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+}
+
+function extractKeyTerms(text: string) {
+  const stopWords = new Set(['about', 'after', 'again', 'against', 'also', 'because', 'before', 'being', 'between', 'could', 'from', 'have', 'into', 'more', 'most', 'should', 'that', 'their', 'there', 'these', 'this', 'through', 'what', 'when', 'where', 'which', 'while', 'with', 'would', 'your']);
+  return [...new Set(text.toLowerCase().match(/[a-z0-9][a-z0-9-]{2,}/g) ?? [])].filter(term => !stopWords.has(term)).slice(0, 18);
+}
+
+function getBestQuote(text: string, terms: string[]) {
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const best = sentences
+    .map(sentence => ({ sentence, score: terms.filter(term => sentence.toLowerCase().includes(term)).length }))
+    .sort((a, b) => b.score - a.score)[0]?.sentence;
+  return (best || text).slice(0, 360);
 }
 
 function formatEvidencePolicyForPrompt(policy: EvidencePolicy, claims: FactualClaim[]) {
@@ -668,6 +749,48 @@ function createScorecard(runState: RunState, finalAnswer: string, sources: Sourc
   return scorecard;
 }
 
+async function createModelScorecard(provider: ModelProvider, model: string, manager: Agent, runState: RunState, finalAnswer: string, sources: SourceRecord[]): Promise<EvaluationScorecard> {
+  const fallback = createScorecard(runState, finalAnswer, sources);
+  try {
+    const prompt = `Score this strategy and creative platform. Return only JSON with integer 0-10 scores and notes array.\n\nCriteria: evidenceCoverage, sourceQuality, claimSupport, strategicSharpness, creativeOriginality, actionability, consistency, overall.\n\nRun state:\n${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}${formatResearchBriefForPrompt(runState.researchBrief)}\n\nOutput:\n${finalAnswer.slice(0, 12000)}\n\nJSON shape:\n{"evidenceCoverage":0,"sourceQuality":0,"claimSupport":0,"strategicSharpness":0,"creativeOriginality":0,"actionability":0,"consistency":0,"overall":0,"notes":["..."]}`;
+    const raw = await callModel(provider, model, manager.systemPrompt || '', prompt, 1400);
+    const parsed = extractScorecard(raw);
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function extractScorecard(rawText: string): EvaluationScorecard | null {
+  const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  const candidate = firstBrace !== -1 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;
+  try {
+    const parsed = JSON.parse(candidate) as Partial<EvaluationScorecard>;
+    const scorecard: EvaluationScorecard = {
+      evidenceCoverage: clampScore(parsed.evidenceCoverage),
+      sourceQuality: clampScore(parsed.sourceQuality),
+      claimSupport: clampScore(parsed.claimSupport),
+      strategicSharpness: clampScore(parsed.strategicSharpness),
+      creativeOriginality: clampScore(parsed.creativeOriginality),
+      actionability: clampScore(parsed.actionability),
+      consistency: clampScore(parsed.consistency),
+      overall: clampScore(parsed.overall),
+      notes: Array.isArray(parsed.notes) ? parsed.notes.filter(note => typeof note === 'string') : []
+    };
+    return scorecard;
+  } catch {
+    return null;
+  }
+}
+
+function clampScore(value: unknown) {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(10, Math.round(number)));
+}
+
 function createProjectMemorySnapshot(runState: RunState, sources: SourceRecord[], sections: DeliverableSection[]): ProjectMemorySnapshot {
   const timestamp = new Date().toISOString();
   return {
@@ -680,6 +803,17 @@ function createProjectMemorySnapshot(runState: RunState, sources: SourceRecord[]
     rejectedClaimIds: [],
     sourceIds: sources.map(source => source.id),
     deliverableSectionIds: sections.map(section => section.id)
+  };
+}
+
+function createProjectLibrary(runState: RunState, sources: SourceRecord[], memory: ProjectMemorySnapshot): ProjectLibrary {
+  return {
+    id: `project-library-${sanitizeId(memory.title)}`,
+    name: memory.title,
+    updatedAt: new Date().toISOString(),
+    memories: [memory],
+    sources,
+    acceptedClaims: runState.factualClaims.filter(claim => claim.status === 'supported')
   };
 }
 
@@ -1009,7 +1143,7 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
             input: `${userQuery}\n${delegation.prompt}`,
             status: 'running'
           });
-          const foundSources = await searchWeb(`${userQuery}\n${delegation.prompt}`, targetAgent.name);
+          const foundSources = await enrichSources(await searchWeb(`${userQuery}\n${delegation.prompt}`, targetAgent.name));
           if (foundSources.length > 0) {
             onSources?.(foundSources);
             allSources = [...allSources, ...foundSources];
@@ -1251,9 +1385,10 @@ Keep the tone direct and concise, avoiding excessive conversational filler, fluf
     const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', `${synthesisPrompt}${formatSourcesForPrompt(allSources)}`, 6144);
     onThinking(secretary.id, false);
   const deliverableSections = extractDeliverableSections(finalAnswer, allSources);
-  const scorecard = createScorecard(runState, finalAnswer, allSources);
+  const scorecard = await createModelScorecard(provider, model, secretary, runState, finalAnswer, allSources);
   const projectMemory = createProjectMemorySnapshot(runState, allSources, deliverableSections);
-  updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined, deliverableSections, scorecard, projectMemory });
+  const projectLibrary = createProjectLibrary(runState, allSources, projectMemory);
+  updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined, deliverableSections, scorecard, projectMemory, projectLibrary });
     addTrace(runState, runtimeOptions, {
       type: 'synthesis',
       title: 'Final synthesis complete',
@@ -1426,7 +1561,7 @@ export async function runAuthoredWorkflow(
         input: `${userQuery}\n${node.prompt || defaultPrompt}`,
         status: 'running'
       });
-      const foundSources = await searchWeb(`${userQuery}\n${node.prompt || defaultPrompt}`, agent.name);
+      const foundSources = await enrichSources(await searchWeb(`${userQuery}\n${node.prompt || defaultPrompt}`, agent.name));
       if (foundSources.length > 0) {
         onSources(foundSources);
         allSources = [...allSources, ...foundSources];
@@ -1531,9 +1666,10 @@ export async function runAuthoredWorkflow(
   const finalAnswer = await callModel(provider, model, manager.systemPrompt || '', synthesisPrompt, 6144);
   onThinking(manager.id, false);
   const deliverableSections = extractDeliverableSections(finalAnswer, allSources);
-  const scorecard = createScorecard(runState, finalAnswer, allSources);
+  const scorecard = await createModelScorecard(provider, model, manager, runState, finalAnswer, allSources);
   const projectMemory = createProjectMemorySnapshot(runState, allSources, deliverableSections);
-  updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined, deliverableSections, scorecard, projectMemory });
+  const projectLibrary = createProjectLibrary(runState, allSources, projectMemory);
+  updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined, deliverableSections, scorecard, projectMemory, projectLibrary });
   addTrace(runState, runtimeOptions, {
     type: 'synthesis',
     title: 'Final synthesis complete',
