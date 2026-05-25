@@ -36,6 +36,8 @@ Manual sources and agent outputs can be promoted into the shared knowledge pool.
 
 Evidence policy now runs before planning. The app extracts factual claims from the user request, decides whether external evidence is required, and can force a Mira evidence-check before dependent strategy or creative steps. Final synthesis is instructed to label material as sourced, assumed, recommended, or needing validation. The Run tab shows the evidence policy, factual claims, tool calls, and repair actions for follow-up research or critique.
 
+When evidence is required and no sources are already attached, The Office builds a multi-query evidence pack before specialist execution. The pack searches current news, market research, forecasts/predictions, competitive examples, cultural adoption signals, and GTM strategy patterns, then stores those sources as a research brief. Penny and the specialists receive the brief so strategy and creative platforms can trace recommendations back to current signals, forecast implications, competitive context, caveats, and source snippets.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

@@ -20,6 +20,7 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
   const latestEvaluation = runState?.evaluations.at(-1);
   const evidencePolicy = runState?.evidencePolicy ?? { required: false, status: 'not-required' as const, reasons: [], requiredToolIds: [] };
   const factualClaims = runState?.factualClaims ?? [];
+  const researchBrief = runState?.researchBrief;
   const counts = useMemo(() => ({
     evidence: evidenceClaims.length,
     knowledge: knowledgeItems.length,
@@ -81,6 +82,16 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
               </article>
             ))}
           </section>
+          {researchBrief && (
+            <section className="intelligence-card intelligence-card--wide">
+              <h3>Research Brief</h3>
+              <p>{researchBrief.sourceIds.length} sources from {researchBrief.queries.length} searches.</p>
+              <StateList title="Current / News Signals" items={researchBrief.currentSignals} />
+              <StateList title="Forecast Signals" items={researchBrief.forecastSignals} />
+              <StateList title="Competitive Signals" items={researchBrief.competitiveSignals} />
+              <StateList title="Caveats" items={researchBrief.caveats} />
+            </section>
+          )}
           <StateList title="Assumptions" items={runState.assumptions} />
           <StateList title="Open Questions" items={runState.openQuestions} />
           <StateList title="Decisions" items={runState.decisions} />

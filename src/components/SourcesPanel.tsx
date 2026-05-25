@@ -52,6 +52,8 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources, onAddSource
             <article key={source.id} className="source-card">
               <div className="source-card__meta">
                 <span>{source.provider}</span>
+                {source.category && <span>{source.category}</span>}
+                {source.publishedDate && <span>{source.publishedDate}</span>}
                 {source.usedBy && <span>{source.usedBy}</span>}
                 {source.query && <span>{source.query}</span>}
               </div>

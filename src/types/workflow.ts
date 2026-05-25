@@ -6,6 +6,7 @@ export type ConfidenceLevel = 'low' | 'medium' | 'high';
 export type EvidenceProvider = 'manual' | 'tavily' | 'exa' | 'brave' | 'bing' | 'model' | 'knowledge';
 export type ClaimStatus = 'unverified' | 'needs-research' | 'supported' | 'assumption';
 export type EvidencePolicyStatus = 'not-required' | 'required' | 'satisfied' | 'missing';
+export type EvidenceCategory = 'research' | 'news' | 'forecast' | 'competitive' | 'culture' | 'strategy';
 
 export interface WorkflowCanvasNode {
   id: string;
@@ -36,9 +37,29 @@ export interface SourceRecord {
   url?: string;
   snippet: string;
   query?: string;
+  category?: EvidenceCategory;
+  publishedDate?: string;
   provider: EvidenceProvider;
   usedBy?: string;
   timestamp: string;
+}
+
+export interface ResearchQuery {
+  id: string;
+  query: string;
+  category: EvidenceCategory;
+  reason: string;
+}
+
+export interface ResearchBrief {
+  id: string;
+  generatedAt: string;
+  queries: ResearchQuery[];
+  sourceIds: string[];
+  currentSignals: string[];
+  forecastSignals: string[];
+  competitiveSignals: string[];
+  caveats: string[];
 }
 
 export interface EvidenceClaim {
@@ -125,6 +146,7 @@ export interface RunState {
   activeStepId?: string;
   summary?: string;
   confidence: ConfidenceLevel;
+  researchBrief?: ResearchBrief;
   evidencePolicy: EvidencePolicy;
   factualClaims: FactualClaim[];
   assumptions: string[];

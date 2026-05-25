@@ -1,10 +1,13 @@
 import { AGENT_CATALOG } from '../data/agents';
 import type {
   EvidenceClaim,
+  EvidenceCategory,
   EvidencePolicy,
   ExecutionTraceRecord,
   FactualClaim,
   KnowledgeItem,
+  ResearchBrief,
+  ResearchQuery,
   RunEvaluation,
   RunState,
   SourceRecord,
@@ -90,6 +93,14 @@ interface RoutingHint {
   agent: Agent;
   score: number;
   matchedKeywords: string[];
+}
+
+interface SearchOptions {
+  maxResults?: number;
+  category?: EvidenceCategory;
+  searchDepth?: 'basic' | 'advanced';
+  topic?: 'general' | 'news';
+  days?: number;
 }
 
 const RUNTIME_TOOLS = {
@@ -201,21 +212,29 @@ async function callModel(provider: ModelProvider, model: string, systemInstructi
   return text;
 }
 
-async function searchWeb(query: string, usedBy: string): Promise<SourceRecord[]> {
+async function searchWeb(query: string, usedBy: string, options: SearchOptions = {}): Promise<SourceRecord[]> {
   const response = await fetch('/api/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, maxResults: 5 })
+    body: JSON.stringify({
+      query,
+      maxResults: options.maxResults ?? 5,
+      searchDepth: options.searchDepth ?? 'basic',
+      topic: options.topic ?? 'general',
+      days: options.days
+    })
   });
 
   if (!response.ok) return [];
-  const data = await readJsonResponse<{ results?: Array<{ title: string; url: string; snippet: string; provider: SourceRecord['provider'] }> }>(response, 'search router');
-  return (data?.results ?? []).map((result: { title: string; url: string; snippet: string; provider: SourceRecord['provider'] }, index: number) => ({
+  const data = await readJsonResponse<{ results?: Array<{ title: string; url: string; snippet: string; provider: SourceRecord['provider']; publishedDate?: string }> }>(response, 'search router');
+  return (data?.results ?? []).map((result, index: number) => ({
     id: `${usedBy}-${Date.now().toString(36)}-${index}`,
     title: result.title,
     url: result.url,
     snippet: result.snippet,
     query,
+    category: options.category ?? 'research',
+    publishedDate: result.publishedDate,
     provider: result.provider,
     usedBy,
     timestamp: new Date().toISOString()
@@ -238,7 +257,16 @@ async function readJsonResponse<T>(response: Response, label: string): Promise<T
 
 function formatSourcesForPrompt(sources: SourceRecord[]) {
   if (sources.length === 0) return '';
-  return `\n\nAvailable sources:\n${sources.map((source, index) => `${index + 1}. ${source.title}${source.url ? ` (${source.url})` : ''}\n${source.snippet}`).join('\n\n')}`;
+  return `\n\nAvailable sources:\n${sources.map((source, index) => `${index + 1}. [${source.category || 'research'}] ${source.title}${source.publishedDate ? ` (${source.publishedDate})` : ''}${source.url ? ` - ${source.url}` : ''}\n${source.snippet}`).join('\n\n')}`;
+}
+
+function formatResearchBriefForPrompt(brief?: ResearchBrief) {
+  if (!brief) return '';
+  return `\n\nResearch brief:\nQueries run:\n${brief.queries.map(query => `- [${query.category}] ${query.query} (${query.reason})`).join('\n')}\n\nCurrent/news signals:\n${formatSignalList(brief.currentSignals)}\n\nForecast/prediction signals:\n${formatSignalList(brief.forecastSignals)}\n\nCompetitive signals:\n${formatSignalList(brief.competitiveSignals)}\n\nCaveats:\n${formatSignalList(brief.caveats)}`;
+}
+
+function formatSignalList(items: string[]) {
+  return items.length > 0 ? items.map(item => `- ${item}`).join('\n') : '- None captured.';
 }
 
 function formatRoutingHints(hints: RoutingHint[]) {
@@ -401,6 +429,88 @@ function evaluateEvidencePolicy(userQuery: string, claims: FactualClaim[], sourc
     reasons,
     requiredToolIds: required ? [RUNTIME_TOOLS.webSearch.id, RUNTIME_TOOLS.claimVerification.id] : []
   };
+}
+
+function createResearchQueries(userQuery: string, claims: FactualClaim[]): ResearchQuery[] {
+  const cleanedObjective = userQuery.replace(/\s+/g, ' ').trim();
+  const claimText = claims.map(claim => claim.text).join('; ');
+  const subject = claimText || cleanedObjective;
+  const queries: Omit<ResearchQuery, 'id'>[] = [
+    {
+      category: 'news',
+      query: `${subject} latest news current developments`,
+      reason: 'Ground the work in current events and recent product or market movement.'
+    },
+    {
+      category: 'research',
+      query: `${cleanedObjective} market research evidence user behavior`,
+      reason: 'Find evidence that should shape the strategic foundation.'
+    },
+    {
+      category: 'forecast',
+      query: `${cleanedObjective} predictions trends forecast future implications`,
+      reason: 'Capture forward-looking signals and plausible future constraints.'
+    },
+    {
+      category: 'competitive',
+      query: `${cleanedObjective} competitors alternatives examples positioning`,
+      reason: 'Benchmark adjacent products, examples, competitors, and positioning moves.'
+    },
+    {
+      category: 'culture',
+      query: `${cleanedObjective} audience culture adoption trust behavior`,
+      reason: 'Understand audience adoption, trust, language, and cultural friction.'
+    },
+    {
+      category: 'strategy',
+      query: `${cleanedObjective} go to market strategy launch playbook`,
+      reason: 'Find GTM precedents and strategy patterns relevant to the brief.'
+    }
+  ];
+
+  return queries.map((query, index) => ({ ...query, id: `research-query-${index + 1}` }));
+}
+
+async function buildEvidencePack(userQuery: string, claims: FactualClaim[], usedBy: string): Promise<{ brief: ResearchBrief; sources: SourceRecord[] }> {
+  const queries = createResearchQueries(userQuery, claims);
+  const sourceMap = new Map<string, SourceRecord>();
+
+  for (const query of queries) {
+    const foundSources = await searchWeb(query.query, usedBy, {
+      category: query.category,
+      maxResults: query.category === 'news' ? 4 : 3,
+      searchDepth: query.category === 'news' || query.category === 'forecast' ? 'advanced' : 'basic',
+      topic: query.category === 'news' ? 'news' : 'general',
+      days: query.category === 'news' ? 30 : undefined
+    });
+
+    for (const source of foundSources) {
+      const key = source.url || `${source.title}-${source.snippet.slice(0, 60)}`;
+      if (!sourceMap.has(key)) sourceMap.set(key, source);
+    }
+  }
+
+  const sources = [...sourceMap.values()].slice(0, 18);
+  const brief: ResearchBrief = {
+    id: `research-brief-${Date.now().toString(36)}`,
+    generatedAt: new Date().toISOString(),
+    queries,
+    sourceIds: sources.map(source => source.id),
+    currentSignals: summarizeSourcesByCategory(sources, ['news', 'research']).slice(0, 6),
+    forecastSignals: summarizeSourcesByCategory(sources, ['forecast']).slice(0, 5),
+    competitiveSignals: summarizeSourcesByCategory(sources, ['competitive', 'strategy']).slice(0, 5),
+    caveats: sources.length === 0
+      ? ['No external sources were returned. Treat factual claims as unverified until research succeeds.']
+      : ['Search results are snippets, not full source ingestion. Validate critical claims before final production decisions.']
+  };
+
+  return { brief, sources };
+}
+
+function summarizeSourcesByCategory(sources: SourceRecord[], categories: EvidenceCategory[]) {
+  return sources
+    .filter(source => source.category && categories.includes(source.category))
+    .map(source => `${source.title}${source.publishedDate ? ` (${source.publishedDate})` : ''}: ${source.snippet.slice(0, 180)}`);
 }
 
 function applyEvidenceToClaims(claims: FactualClaim[], sources: SourceRecord[]): FactualClaim[] {
@@ -724,6 +834,45 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       runtimeOptions.onKnowledgeItems?.(initialKnowledge);
       updateRunState(runState, runtimeOptions, { knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, initialKnowledge.map(item => item.id)) });
     }
+    if (evidencePolicy.required && allSources.length === 0) {
+      const toolCall = addToolCall(runState, runtimeOptions, {
+        toolId: RUNTIME_TOOLS.webSearch.id,
+        toolName: 'Evidence pack search',
+        requestedBy: secretary.name,
+        input: userQuery,
+        status: 'running'
+      });
+      const { brief, sources: evidencePackSources } = await buildEvidencePack(userQuery, runState.factualClaims, secretary.name);
+      if (evidencePackSources.length > 0) {
+        onSources?.(evidencePackSources);
+        allSources = [...allSources, ...evidencePackSources];
+        const knowledgeItems = sourcesToKnowledgeItems(evidencePackSources);
+        const evidenceClaims = createEvidenceClaims(evidencePackSources, secretary.name);
+        runtimeOptions.onKnowledgeItems?.(knowledgeItems);
+        runtimeOptions.onEvidenceClaims?.(evidenceClaims);
+        evidencePolicy = evaluateEvidencePolicy(userQuery, runState.factualClaims, allSources);
+        updateRunState(runState, runtimeOptions, {
+          researchBrief: brief,
+          evidencePolicy,
+          factualClaims: applyEvidenceToClaims(runState.factualClaims, evidencePackSources),
+          knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, knowledgeItems.map(item => item.id)),
+          evidenceClaimIds: mergeUnique(runState.evidenceClaimIds, evidenceClaims.map(claim => claim.id))
+        });
+      } else {
+        updateRunState(runState, runtimeOptions, { researchBrief: brief, evidencePolicy: { ...evidencePolicy, status: 'missing' } });
+      }
+      updateToolCall(runState, runtimeOptions, toolCall.id, {
+        status: evidencePackSources.length > 0 ? 'complete' : 'error',
+        outputSummary: evidencePackSources.length > 0 ? `${evidencePackSources.length} sources found across ${brief.queries.length} queries` : 'No sources returned for evidence pack',
+        sourceIds: evidencePackSources.map(source => source.id)
+      });
+      addTrace(runState, runtimeOptions, {
+        type: 'tool-call',
+        title: 'Evidence pack built',
+        detail: `${brief.queries.length} queries; ${evidencePackSources.length} sources`,
+        agentId: secretary.id
+      });
+    }
     updateRunState(runState, runtimeOptions, { status: 'executing' });
 
     // --- Step 2: Execute delegations in sequence/parallel ---
@@ -790,7 +939,7 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
           });
         }
         const dependencyContext = formatDependencyContext(delegation, stepResults);
-        const prompt = `${buildDelegationPrompt(userQuery, delegation, dependencyContext, runSources)}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}\n\nWhen making factual claims, label them as sourced, assumed, or needing validation.`;
+        const prompt = `${buildDelegationPrompt(userQuery, delegation, dependencyContext, runSources)}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}${formatResearchBriefForPrompt(runState.researchBrief)}\n\nWhen making factual claims, label them as sourced, assumed, or needing validation. Tie strategy and creative recommendations back to current signals, forecast signals, competitive signals, or caveats.`;
         const subResult = await callModel(provider, stepModel, targetAgent.systemPrompt || '', prompt);
         stepResults[delegation.id] = {
           id: delegation.id,
@@ -867,6 +1016,7 @@ User objective:
 ${userQuery}
 
 ${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}
+${formatResearchBriefForPrompt(runState.researchBrief)}
 
 Current outputs:
 ${formatStepResultsForSynthesis(stepResults, executionOrder)}
@@ -985,11 +1135,13 @@ The team has finished their sub-tasks for this objective:
 ${userQuery}
 
 ${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}
+${formatResearchBriefForPrompt(runState.researchBrief)}
 
 Execution trace:
 ${formatStepResultsForSynthesis(stepResults, synthesisOrder)}
 
 Based on their findings and your role as Penny (Executive Coordinator), present the final compiled solution to the User. Make it professional, beautifully structured with headings/markdown, and highlight which expert provided which insights.
+Create a complete strategy and creative platform from the research: situation, current/news signals, forecast implications, audience truth, strategic choice, positioning, creative platform, messaging system, channel plan, proof points, risks, and next experiments.
 Use explicit labels for Sourced, Assumed, Recommended, and Needs validation. When evidence is missing but policy required it, state that clearly before recommendations. Cite sources by title or URL where relevant.
 Keep the tone direct and concise, avoiding excessive conversational filler, fluff, or chatty pleasantries.
 `;
@@ -1088,6 +1240,45 @@ export async function runAuthoredWorkflow(
     runtimeOptions.onKnowledgeItems?.(initialKnowledge);
     updateRunState(runState, runtimeOptions, { knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, initialKnowledge.map(item => item.id)) });
   }
+  if (evidencePolicy.required && allSources.length === 0) {
+    const toolCall = addToolCall(runState, runtimeOptions, {
+      toolId: RUNTIME_TOOLS.webSearch.id,
+      toolName: 'Evidence pack search',
+      requestedBy: manager.name,
+      input: userQuery,
+      status: 'running'
+    });
+    const { brief, sources: evidencePackSources } = await buildEvidencePack(userQuery, runState.factualClaims, manager.name);
+    if (evidencePackSources.length > 0) {
+      onSources(evidencePackSources);
+      allSources = [...allSources, ...evidencePackSources];
+      const knowledgeItems = sourcesToKnowledgeItems(evidencePackSources);
+      const evidenceClaims = createEvidenceClaims(evidencePackSources, manager.name);
+      runtimeOptions.onKnowledgeItems?.(knowledgeItems);
+      runtimeOptions.onEvidenceClaims?.(evidenceClaims);
+      evidencePolicy = evaluateEvidencePolicy(userQuery, runState.factualClaims, allSources);
+      updateRunState(runState, runtimeOptions, {
+        researchBrief: brief,
+        evidencePolicy,
+        factualClaims: applyEvidenceToClaims(runState.factualClaims, evidencePackSources),
+        knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, knowledgeItems.map(item => item.id)),
+        evidenceClaimIds: mergeUnique(runState.evidenceClaimIds, evidenceClaims.map(claim => claim.id))
+      });
+    } else {
+      updateRunState(runState, runtimeOptions, { researchBrief: brief, evidencePolicy: { ...evidencePolicy, status: 'missing' } });
+    }
+    updateToolCall(runState, runtimeOptions, toolCall.id, {
+      status: evidencePackSources.length > 0 ? 'complete' : 'error',
+      outputSummary: evidencePackSources.length > 0 ? `${evidencePackSources.length} sources found across ${brief.queries.length} queries` : 'No sources returned for evidence pack',
+      sourceIds: evidencePackSources.map(source => source.id)
+    });
+    addTrace(runState, runtimeOptions, {
+      type: 'tool-call',
+      title: 'Evidence pack built',
+      detail: `${brief.queries.length} queries; ${evidencePackSources.length} sources`,
+      agentId: manager.id
+    });
+  }
 
   onStep(manager.id, {
     id: uuid(),
@@ -1161,7 +1352,7 @@ export async function runAuthoredWorkflow(
       });
     }
 
-    const prompt = `${node.prompt || defaultPrompt}\n\nUser request:\n${userQuery}\n\n${upstreamContext ? `Upstream context:\n${upstreamContext}` : ''}${formatSourcesForPrompt(runSources)}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}\n\nWhen making factual claims, label them as sourced, assumed, or needing validation.`;
+    const prompt = `${node.prompt || defaultPrompt}\n\nUser request:\n${userQuery}\n\n${upstreamContext ? `Upstream context:\n${upstreamContext}` : ''}${formatSourcesForPrompt(runSources)}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}${formatResearchBriefForPrompt(runState.researchBrief)}\n\nWhen making factual claims, label them as sourced, assumed, or needing validation. Tie strategy and creative recommendations back to current signals, forecast signals, competitive signals, or caveats.`;
 
     try {
       const output = await callModel(provider, stepModel, agent.systemPrompt || '', prompt);
@@ -1231,7 +1422,7 @@ export async function runAuthoredWorkflow(
   updateRunState(runState, runtimeOptions, { status: 'synthesizing', activeStepId: synthesisNode.id });
 
   const workflowOutputs = Object.entries(nodeOutputs).map(([id, output]) => `\n## ${id}\n${output}`).join('\n');
-  const synthesisPrompt = `Synthesize this authored workflow into a polished final output. Use explicit labels for Sourced, Assumed, Recommended, and Needs validation. If evidence is missing but policy required it, state that before recommendations. Cite available sources by title or URL where relevant.\n\nUser request:\n${userQuery}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}\n\nWorkflow outputs:\n${workflowOutputs}${formatSourcesForPrompt(allSources)}`;
+  const synthesisPrompt = `Synthesize this authored workflow into a polished final output. Create a complete strategy and creative platform from the research: situation, current/news signals, forecast implications, audience truth, strategic choice, positioning, creative platform, messaging system, channel plan, proof points, risks, and next experiments. Use explicit labels for Sourced, Assumed, Recommended, and Needs validation. If evidence is missing but policy required it, state that before recommendations. Cite available sources by title or URL where relevant.\n\nUser request:\n${userQuery}${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}${formatResearchBriefForPrompt(runState.researchBrief)}\n\nWorkflow outputs:\n${workflowOutputs}${formatSourcesForPrompt(allSources)}`;
   const finalAnswer = await callModel(provider, model, manager.systemPrompt || '', synthesisPrompt, 6144);
   onThinking(manager.id, false);
   updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined });
