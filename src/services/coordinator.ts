@@ -356,6 +356,7 @@ function getRoutingGates(userQuery: string): RoutingGate[] {
   const isFutureFacing = /\b(future|futures|forecast|prediction|trend|trends|scenario|signals|horizon|where .* going|next few years|emerging)\b/.test(query);
   const needsMeasurement = /\b(gtm|go-to-market|go to market|launch|growth|experiment|test|testing|kpi|metrics|measurement|success|dashboard|conversion|retention|activation|funnel|30\/60\/90|90 days)\b/.test(query);
   const needsWriter = /\b(campaign|creative platform|brand platform|messaging|copy|copywriting|tagline|headline|voice|launch|gtm|go-to-market|go to market|manifesto|landing page|social|ad|naming)\b/.test(query);
+  const needsArtDirection = /\b(campaign|creative platform|brand platform|messaging|launch|gtm|go-to-market|go to market|identity|visual|art direction|look and feel|upper funnel|mid funnel|lower funnel|funnel creative|creative idea|creative territory|territories)\b/.test(query);
 
   if (isStrategyOrCreative) {
     gates.push({
@@ -394,6 +395,14 @@ function getRoutingGates(userQuery: string): RoutingGate[] {
       role: 'writer',
       reason: 'Campaign, GTM, creative platform, messaging, naming, or launch work needs sharp audience-facing language rather than generic strategy prose.',
       prompt: 'Create the verbal platform. Find the human tension, write distinct creative territories, choose the strongest territory, build the messaging system, line bank, voice rules, and rewrite pass.'
+    });
+  }
+
+  if (needsArtDirection) {
+    gates.push({
+      role: 'creative_director',
+      reason: 'Campaign, launch, creative platform, and funnel work needs an art director to turn the verbal hook into a full visual and channel system.',
+      prompt: 'Partner with Stephen. Pressure-test his lines for visual potential and turn the strongest hook into upper, mid, and lower funnel creative ideas with art direction, formats, and system rules.'
     });
   }
 
@@ -532,7 +541,7 @@ const REQUIRED_DELIVERABLE_SECTIONS = [
 ];
 
 function formatDeliverableSchemaForPrompt() {
-  return `\n\nRequired deliverable schema:\n${REQUIRED_DELIVERABLE_SECTIONS.map(section => `## ${section}`).join('\n')}\n\nEvery section must be present. In Creative Platform and Messaging Architecture, preserve Stephen's sharpest language, include multiple creative territories when available, and avoid flattening lines into generic strategy prose. In Evidence Table, include source title or URL, claim supported, confidence, and relevance. In Assumptions Table, include assumption, why it matters, and validation action.`;
+  return `\n\nRequired deliverable schema:\n${REQUIRED_DELIVERABLE_SECTIONS.map(section => `## ${section}`).join('\n')}\n\nEvery section must be present. In Creative Platform and Messaging Architecture, preserve Stephen's sharpest language, include multiple creative territories when available, and avoid flattening lines into generic strategy prose. Show how the recommended hook scales into upper, mid, and lower funnel creative with August's visual/system guidance. In Evidence Table, include source title or URL, claim supported, confidence, and relevance. In Assumptions Table, include assumption, why it matters, and validation action.`;
 }
 
 function buildDelegationPrompt(userQuery: string, delegation: NormalizedDelegation, dependencyContext: string, sources: SourceRecord[]) {
@@ -540,9 +549,15 @@ function buildDelegationPrompt(userQuery: string, delegation: NormalizedDelegati
 }
 
 function formatAgentSpecificBrief(agentRole: string) {
-  if (agentRole !== 'writer') return '';
-  return `\n\nStephen-specific copy mandate:\n- Do not summarize the strategy as copy. Turn it into language with tension, point of view, and memorability.\n- Produce three distinct creative territories before choosing one.\n- Include a line bank with at least 12 usable lines across headlines, taglines, CTAs, social hooks, and product/lifecycle copy.\n- Include voice rules and taboo phrases.\n- Include one weak generic line rewritten into a sharper line with rationale.\n- Avoid mush words like empower, unlock, seamless, innovative, reimagine, transform, next-generation, supercharge, elevate, robust, solution, leverage, at scale, future of, and generic AI-powered claims.\n- Make every major line specific to this brand, audience, product, evidence, or cultural tension.`;
-  return `\n\nStephen-specific copy mandate:\n- Do not summarize the strategy as copy. Turn it into language with tension, point of view, and memorability.\n- Produce three distinct creative territories before choosing one.\n- Include a line bank with at least 12 usable lines across headlines, taglines, CTAs, social hooks, and product/lifecycle copy.\n- Include voice rules and taboo phrases.\n- Include one weak generic line rewritten into a sharper line with rationale.\n- Apply the hostile self-read: What does that even mean? Who cares? Would a smart, skeptical audience tell this brand to fuck off?\n- Kill lines that sound vague, pompous, fake-helpful, self-congratulatory, overbalanced, or committee-approved.\n- Avoid mush words like empower, unlock, seamless, innovative, reimagine, transform, next-generation, supercharge, elevate, robust, solution, leverage, at scale, future of, and generic AI-powered claims.\n- Make every major line specific to this brand, audience, product, evidence, or cultural tension.`;
+  if (agentRole === 'writer') {
+    return `\n\nStephen-specific copy mandate:\n- Do not summarize the strategy as copy. Turn it into language with tension, point of view, and memorability.\n- Produce three distinct creative territories before choosing one.\n- Include a line bank with at least 12 usable lines across headlines, taglines, CTAs, social hooks, and product/lifecycle copy.\n- Include voice rules and taboo phrases.\n- Include one weak generic line rewritten into a sharper line with rationale.\n- Apply the hostile self-read: What does that even mean? Who cares? Would a smart, skeptical audience tell this brand to fuck off?\n- Kill lines that sound vague, pompous, fake-helpful, self-congratulatory, overbalanced, or committee-approved.\n- Each territory must include a simple hook August can turn into upper, mid, and lower funnel creative.\n- The best line should feel so true that the audience thinks: how did I not think of that?\n- Avoid mush words like empower, unlock, seamless, innovative, reimagine, transform, next-generation, supercharge, elevate, robust, solution, leverage, at scale, future of, and generic AI-powered claims.\n- Make every major line specific to this brand, audience, product, evidence, or cultural tension.`;
+  }
+
+  if (agentRole === 'creative_director') {
+    return `\n\nAugust-specific writer/art-director mandate:\n- Treat Stephen's best line as raw creative material, not decoration.\n- Pressure-test whether the hook can become a visual system across upper, mid, and lower funnel.\n- If the line cannot produce a poster, film/social idea, landing-page system, product moment, and sales/deck expression, say so and propose a stronger creative spine.\n- Build from one simple, true hook that feels obvious in hindsight.\n- Show how the line becomes image logic, layout, motion, typography, proof, CTA behavior, and channel formats.\n- Name what would make the idea distinctive, not just attractive.`;
+  }
+
+  return '';
 }
 
 function extractFactualClaims(userQuery: string): FactualClaim[] {

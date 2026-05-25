@@ -32,6 +32,7 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Stephen's writing instructions now require sharper copy discipline: human tension, point of view, multiple territories, line banks, voice rules, taboo phrases, and a visible rewrite pass.
 - The coordinator now adds a Stephen-specific copy mandate whenever the writer is called and protects his strongest language during final synthesis.
 - Stephen now has a hostile self-read and "fuck off" test: he must ask what a line means, who cares, whether a skeptical audience would reject it, and kill fake-helpful or committee-safe copy before it reaches synthesis.
+- Stephen and August now have an explicit writer/art-director handoff. Stephen must produce hooks with visual and funnel potential; August must turn the strongest hook into upper, mid, and lower funnel creative systems.
 
 ## Bug Check Results
 

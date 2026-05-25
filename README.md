@@ -48,6 +48,8 @@ The team includes a measurement specialist, Nora, who owns KPIs, experiments, gr
 
 Stephen's writer profile now uses a stricter copy operating system. Creative and campaign work asks him to find the human tension, produce multiple territories, recommend one, build a messaging system, write a line bank, define voice rules, and include a rewrite pass. The coordinator also adds a Stephen-specific mandate whenever he is called so the final work avoids generic strategy prose and preserves sharper language.
 
+Stephen and August now operate as a writer/art-director pair. Stephen is expected to produce hooks that August can visualize and scale; August pressure-tests whether a line can become upper, mid, and lower funnel creative. Strong hooks should feel simple, true, and inevitable enough that the audience wonders why they had not already thought of it.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.
