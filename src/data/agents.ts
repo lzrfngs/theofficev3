@@ -7,6 +7,7 @@ import anthropologistPrompt from '../../docs/agents/anthropologist.md?raw';
 import techExpertPrompt from '../../docs/agents/tech_expert.md?raw';
 import researcherPrompt from '../../docs/agents/researcher.md?raw';
 import futuristPrompt from '../../docs/agents/futurist.md?raw';
+import measurementAnalystPrompt from '../../docs/agents/measurement_analyst.md?raw';
 
 export const AGENT_CATALOG: Agent[] = [
   {
@@ -121,6 +122,31 @@ The strongest opportunity is trust. Users respond when agent systems feel legibl
 1. **Authenticity matters**: People reject vague automation claims quickly.
 2. **Control reduces anxiety**: Make it obvious which agent is acting and why.
 3. **Recommendation**: Keep the team metaphor visible, but let the user stay in charge of the workflow.`
+  },
+  {
+    id: 'measurement_analyst',
+    name: 'Nora',
+    title: 'Measurement & Growth Analyst',
+    role: 'measurement_analyst',
+    avatar: '/portraits/strategist.jpg',
+    color: '#a3e635',
+    badgeClass: 'badge-measurement',
+    activeClass: 'active-measurement',
+    mdFile: 'docs/agents/measurement_analyst.md',
+    systemPrompt: measurementAnalystPrompt,
+    specialtyKeywords: ['measurement', 'metrics', 'kpi', 'kpis', 'okr', 'okrs', 'analytics', 'dashboard', 'experiment', 'experiments', 'test', 'testing', 'growth', 'funnel', 'conversion', 'retention', 'activation', 'success criteria', 'learning agenda', '30/60/90', 'readout'],
+    mockAction: 'define success metrics and tests',
+    mockFocus: 'Turn recommendations into measurable bets, KPIs, experiments, and a learning agenda.',
+    mockResponse: `### Measurement & Experiment Plan
+I would frame success around three layers:
+
+| Layer | Question | Example Signal |
+| :--- | :--- | :--- |
+| **Belief** | Does the audience understand and believe the promise? | Message recall, qualitative resonance |
+| **Behavior** | Does the work change what people do? | Trial, activation, conversion, retention |
+| **Business** | Does the change compound? | Pipeline, revenue, expansion, efficiency |
+
+**Recommendation:** Every strategic recommendation should carry a testable hypothesis, a leading indicator, and a decision threshold.`
   },
   {
     id: 'researcher',

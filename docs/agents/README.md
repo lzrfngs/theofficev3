@@ -21,3 +21,4 @@ Current agents:
 - Mira: researcher
 - Iris: futurist
 - Vadim: tech expert
+- Nora: measurement and growth analyst

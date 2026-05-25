@@ -100,6 +100,13 @@ interface RoutingHint {
   matchedKeywords: string[];
 }
 
+interface RoutingGate {
+  role: string;
+  reason: string;
+  prompt: string;
+  dependsOn?: string[];
+}
+
 interface SearchOptions {
   maxResults?: number;
   category?: EvidenceCategory;
@@ -340,6 +347,55 @@ function getRoutingHints(userQuery: string, specialists: Agent[]): RoutingHint[]
     .sort((a, b) => b.score - a.score || a.agent.name.localeCompare(b.agent.name));
 }
 
+function getRoutingGates(userQuery: string): RoutingGate[] {
+  const query = userQuery.toLowerCase();
+  const gates: RoutingGate[] = [];
+
+  const isStrategyOrCreative = /\b(gtm|go-to-market|go to market|strategy|positioning|launch|campaign|creative platform|brand platform|messaging|market|audience|customer|growth)\b/.test(query);
+  const isAiProductOrPlatform = /\b(ai|copilot|agent|agents|llm|automation|software|platform|product|api|data|technical|architecture|prototype|workflow|integration)\b/.test(query);
+  const isFutureFacing = /\b(future|futures|forecast|prediction|trend|trends|scenario|signals|horizon|where .* going|next few years|emerging)\b/.test(query);
+  const needsMeasurement = /\b(gtm|go-to-market|go to market|launch|growth|experiment|test|testing|kpi|metrics|measurement|success|dashboard|conversion|retention|activation|funnel|30\/60\/90|90 days)\b/.test(query);
+
+  if (isStrategyOrCreative) {
+    gates.push({
+      role: 'anthropologist',
+      reason: 'GTM, strategy, and creative platform work depends on audience adoption, cultural reception, trust, and behavior.',
+      prompt: 'Provide an audience and cultural reality check. Identify adoption friction, trust signals, status dynamics, language risks, and what would make the audience feel seen rather than targeted.'
+    });
+  }
+
+  if (isAiProductOrPlatform) {
+    gates.push({
+      role: 'tech_expert',
+      reason: 'AI, product, platform, software, or automation work needs feasibility, technical trust, data, and implementation risk review.',
+      prompt: 'Provide a technical feasibility and trust review. Identify product behavior implied by the strategy, architecture constraints, AI/data risks, implementation dependencies, and failure modes.'
+    });
+  }
+
+  if (isFutureFacing) {
+    gates.push({
+      role: 'futurist',
+      reason: 'Future-facing or trend-sensitive work needs signals, uncertainty, scenarios, and implications.',
+      prompt: 'Provide a foresight pass. Identify signals, plausible scenarios, critical uncertainties, watchpoints, and implications for the strategy and creative platform.'
+    });
+  }
+
+  if (needsMeasurement) {
+    gates.push({
+      role: 'measurement_analyst',
+      reason: 'Launch, GTM, growth, and strategy work needs measurable success criteria, experiments, and a learning agenda.',
+      prompt: 'Define the measurement system. Provide KPIs, leading indicators, experiments, decision thresholds, dashboard needs, and a 30/60/90 day learning agenda.'
+    });
+  }
+
+  return gates;
+}
+
+function formatRoutingGates(gates: RoutingGate[]) {
+  if (gates.length === 0) return 'No mandatory routing gates were triggered.';
+  return gates.map(gate => `- ${gate.role}: ${gate.reason}`).join('\n');
+}
+
 function extractPlannerJson(rawText: string): PlanningResult | null {
   const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
   const candidates = [cleaned];
@@ -384,6 +440,29 @@ function createFallbackPlan(userQuery: string, specialists: Agent[], routingHint
     })),
     response: `${coordinatorName} will consult ${fallbackAgents.map(agent => agent.name).join(' and ')} based on the strongest routing signals. Working with the other agents now...`
   };
+}
+
+function applyRoutingGates(delegations: NormalizedDelegation[], gates: RoutingGate[], agents: Agent[]): NormalizedDelegation[] {
+  const usedIds = new Set(delegations.map(delegation => delegation.id));
+  const nextDelegations = [...delegations];
+
+  gates.forEach((gate, index) => {
+    if (nextDelegations.some(delegation => delegation.agent === gate.role)) return;
+    const agent = agents.find(candidate => candidate.role === gate.role);
+    if (!agent) return;
+    const baseId = sanitizeId(`${gate.role}-review`);
+    const id = usedIds.has(baseId) ? `${baseId}-${index + 1}` : baseId;
+    usedIds.add(id);
+    nextDelegations.push({
+      id,
+      agent: agent.role,
+      label: `${agent.name} review`,
+      prompt: `${gate.prompt}\n\nReason Penny must include this role: ${gate.reason}`,
+      dependsOn: gate.dependsOn ?? []
+    });
+  });
+
+  return nextDelegations;
 }
 
 function sortDelegationsByDependencies(delegations: NormalizedDelegation[]): NormalizedDelegation[] {
@@ -977,6 +1056,8 @@ export async function runMultiAgentPipeline(
   const specialists = getSpecialists(activeAgents);
   const routingHints = getRoutingHints(userQuery, specialists);
   const routingHintText = formatRoutingHints(routingHints);
+  const routingGates = getRoutingGates(userQuery);
+  const routingGateText = formatRoutingGates(routingGates);
   
   // Helper to generate timestamps
   const getTimestamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1010,17 +1091,22 @@ ${specialists.map(agent => `   - ${agent.name} (${agent.role}): ${agent.title}`)
 2. Write a JSON structure indicating which workflow steps you want to run, which agent owns each step, what prompt to send, and any dependencies between steps.
 3. Use this deterministic routing prior as evidence, then apply judgment:
 ${routingHintText}
-4. Apply the evidence policy. If evidence is required, include Mira/researcher or depend on the automatic evidence-check step before making claims.
+4. Obey these mandatory routing gates unless the user explicitly asked to skip that role:
+${routingGateText}
+5. Apply the evidence policy. If evidence is required, include Mira/researcher or depend on the automatic evidence-check step before making claims.
 ${formatEvidencePolicyForPrompt(evidencePolicy, factualClaims)}
-5. EXERCISE WISDOM: Do NOT automatically consult all agents. Selectively consult ONLY the specialist(s) that are relevant to the query (between 1 and 4 agents).
+6. EXERCISE WISDOM: Do NOT automatically consult all agents. Selectively consult ONLY the specialist(s) that are relevant to the query and mandatory gates (usually between 1 and 6 agents).
   - If a specialist's title and role are irrelevant, omit that specialist.
   - If the request is pure coding, API design, setup, or systems architecture, prioritize technical agents.
   - If the request is creative writing, branding, advertising, or campaign work, prioritize creative agents.
-  - If user research, demographics, culture, or behavior are irrelevant, omit cultural research agents.
+  - Do not omit John when the work depends on audience adoption, culture, trust, or reception.
+  - Do not omit Vadim when the work involves AI, software, platforms, product behavior, automation, data, or technical trust.
+  - Do not omit Iris when the work depends on trends, forecasts, futures, or category shifts.
+  - Do not omit Nora when the work needs launch metrics, experiments, KPIs, growth, or success criteria.
   - If business strategy, SWOT, pricing, or OKRs are irrelevant, omit strategy agents.
-6. You may use the same specialist more than once if the work naturally loops back to them. Each repeated appearance must be a separate delegation with a unique id.
-7. If a step depends on another step, put the prior step id in dependsOn. Later steps will receive dependency outputs at runtime.
-8. Provide a very concise status message in the 'response' field outlining your plan to the user. Avoid pleasantries, chit-chat, or filler text. Start directly with the plan, state exactly which agents you are consulting and why (in a short sentence), and end with: "Working with the other agents now..."
+7. You may use the same specialist more than once if the work naturally loops back to them. Each repeated appearance must be a separate delegation with a unique id.
+8. If a step depends on another step, put the prior step id in dependsOn. Later steps will receive dependency outputs at runtime.
+9. Provide a very concise status message in the 'response' field outlining your plan to the user. Avoid pleasantries, chit-chat, or filler text. Start directly with the plan, state exactly which agents you are consulting and why (in a short sentence), and end with: "Working with the other agents now..."
 
 Your response MUST be valid JSON in this exact format:
 {
@@ -1046,7 +1132,8 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
 
     const normalizedDelegations = normalizeDelegations(plan.delegations, activeAgents);
     const baseDelegations = normalizedDelegations.length > 0 ? normalizedDelegations : normalizeDelegations(fallbackPlan.delegations, activeAgents);
-    const executableDelegations = ensureEvidenceDelegation(baseDelegations, specialists, evidencePolicy, factualClaims);
+    const gatedDelegations = applyRoutingGates(baseDelegations, routingGates, activeAgents);
+    const executableDelegations = ensureEvidenceDelegation(gatedDelegations, specialists, evidencePolicy, factualClaims);
     const executionOrder = sortDelegationsByDependencies(executableDelegations);
     const synthesisOrder = [...executionOrder];
     const workflow = createWorkflowPlan(userQuery, secretary, activeAgents, executableDelegations);

@@ -14,6 +14,7 @@
   --color-researcher: oklch(0.70 0.14 250);     /* Research Blue */
   --color-futurist: oklch(0.72 0.16 315);       /* Foresight Orchid */
   --color-tech: oklch(0.74 0.13 220);          /* Slate Cyan */
+  --color-measurement: oklch(0.78 0.16 132);   /* Growth Lime */
 
   /* Glowing accents */
   --glow-secretary: 0 0 20px oklch(from var(--color-secretary) l c h / 0.20);
@@ -24,6 +25,7 @@
   --glow-researcher: 0 0 20px oklch(from var(--color-researcher) l c h / 0.20);
   --glow-futurist: 0 0 20px oklch(from var(--color-futurist) l c h / 0.20);
   --glow-tech: 0 0 20px oklch(from var(--color-tech) l c h / 0.20);
+  --glow-measurement: 0 0 20px oklch(from var(--color-measurement) l c h / 0.20);
 }
 
 /* Base layouts */
@@ -374,6 +376,7 @@ body {
 .workflow-node.badge-researcher { --node-accent: var(--color-researcher); }
 .workflow-node.badge-futurist { --node-accent: var(--color-futurist); }
 .workflow-node.badge-tech { --node-accent: var(--color-tech); }
+.workflow-node.badge-measurement { --node-accent: var(--color-measurement); }
 
 .workflow-node--thinking {
   box-shadow: var(--edge-top), 0 0 22px color-mix(in oklch, var(--node-accent), transparent 72%), var(--shadow-md);
@@ -1604,6 +1607,10 @@ button.agent-roster__item {
   box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-tech);
   border-color: var(--color-tech);
 }
+.agent-card.active-measurement {
+  box-shadow: var(--edge-ring), var(--shadow-md), var(--glow-measurement);
+  border-color: var(--color-measurement);
+}
 
 .agent-card.badge-secretary { --agent-color: var(--color-secretary); }
 .agent-card.badge-writer { --agent-color: var(--color-writer); }
@@ -1613,6 +1620,7 @@ button.agent-roster__item {
 .agent-card.badge-researcher { --agent-color: var(--color-researcher); }
 .agent-card.badge-futurist { --agent-color: var(--color-futurist); }
 .agent-card.badge-tech { --agent-color: var(--color-tech); }
+.agent-card.badge-measurement { --agent-color: var(--color-measurement); }
 
 /* Agent Header */
 .agent-header {
@@ -2319,5 +2327,11 @@ button.agent-roster__item {
   color: var(--color-tech) !important;
   background: oklch(from var(--color-tech) calc(l - 0.5) c h / 0.12) !important;
   border: 1px solid oklch(from var(--color-tech) l c h / 0.25) !important;
+}
+
+.badge-measurement {
+  color: var(--color-measurement) !important;
+  background: oklch(from var(--color-measurement) calc(l - 0.5) c h / 0.12) !important;
+  border: 1px solid oklch(from var(--color-measurement) l c h / 0.25) !important;
 }
 

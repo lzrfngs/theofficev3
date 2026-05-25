@@ -44,6 +44,8 @@ Source grounding now includes `/api/ingest`, which fetches readable text from so
 
 Projects are now a first-class local workspace concept. The Projects tab can create/select projects, save the current run, retain enriched sources, accepted and rejected claims, open questions, deliverable sections, and run memories. Active project sources are fed into future runs. The Run tab also exposes claim controls for accepting, assuming, rejecting, researching, or challenging individual claims.
 
+The team includes a measurement specialist, Nora, who owns KPIs, experiments, growth loops, dashboards, success criteria, and learning agendas. Penny also applies mandatory routing gates: GTM/creative work brings in John for audience and cultural reception, AI/product/platform work brings in Vadim for feasibility and technical trust, future-facing work brings in Iris for signals and scenarios, and launch/growth/measurement work brings in Nora.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

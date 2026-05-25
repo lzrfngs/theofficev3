@@ -27,6 +27,8 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Active project sources are fed into future workflow runs.
 - The Run tab now supports claim-level accept, assume, reject, research, and challenge actions.
 - Manual sources are ingested through `/api/ingest` before being stored.
+- Nora, a measurement and growth analyst, has been added to own KPIs, experiments, dashboards, success criteria, and learning agendas.
+- Penny now applies mandatory routing gates for audience/culture review, technical feasibility, futures/scenario review, and measurement/growth review.
 
 ## Bug Check Results
 
@@ -44,6 +46,8 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Source ingestion uses simple readability cleanup, not a full browser renderer or PDF parser.
 - Projects are still localStorage-backed rather than database-backed.
 - Claim controls update local state and project memory, but do not yet create a formal audit trail per claim decision.
+- Mandatory routing gates improve coverage, but they can increase token/cost load on broad briefs.
+- Nora currently reuses the strategist portrait until a dedicated portrait is added.
 - Web search can be triggered by policy, but the tool registry is still runtime-internal rather than a full agent-request protocol.
 - Import/export provides portable persistence, but there is still no backend project database or searchable run history.
 - The critique loop is bounded to keep cost and runaway behavior under control; deeper iterative re-planning will need user controls and budget limits.
