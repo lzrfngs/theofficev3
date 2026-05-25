@@ -1323,6 +1323,208 @@ button.agent-roster__item {
   padding-left: var(--space-4);
 }
 
+.review-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
+  box-shadow: var(--edge-ring), var(--shadow-sm);
+  overflow: hidden;
+}
+
+.review-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.review-panel__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.review-panel__title {
+  margin: 3px 0 0;
+  color: var(--ink-1);
+  font-family: var(--font-serif);
+  font-size: var(--fs-24);
+  font-weight: 500;
+}
+
+.review-panel__subtitle {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-12);
+}
+
+.review-panel__workspace {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 360px;
+  overflow: hidden;
+}
+
+.review-panel__sections,
+.review-panel__main,
+.review-panel__notes {
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+}
+
+.review-panel__sections {
+  border-right: 1px solid var(--line-1);
+  background: var(--surface-0);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.review-panel__notes {
+  border-left: 1px solid var(--line-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.review-section-tab {
+  text-align: left;
+  padding: var(--space-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-1);
+  background: var(--surface-1);
+  color: var(--ink-1);
+  cursor: pointer;
+}
+
+.review-section-tab.is-active,
+.review-section-tab:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.review-section-tab strong,
+.review-section-tab span {
+  display: block;
+}
+
+.review-section-tab span {
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: var(--fs-12);
+}
+
+.review-document,
+.review-card {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line-1);
+  background: var(--surface-0);
+  padding: var(--space-5);
+}
+
+.review-document__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.review-document__header h3,
+.review-card h3 {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-1);
+}
+
+.review-document__body {
+  max-width: none;
+}
+
+.review-card {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.review-card p,
+.review-note span,
+.revision-candidate p {
+  color: var(--ink-2);
+  font-size: var(--fs-12);
+  line-height: 1.45;
+}
+
+.review-textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-1);
+  background: var(--surface-1);
+  color: var(--ink-1);
+  padding: var(--space-3);
+  font: inherit;
+  font-size: var(--fs-13);
+  line-height: 1.45;
+}
+
+.review-agent-grid,
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.review-agent-chip {
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  color: var(--ink-2);
+  padding: 5px 8px;
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+
+.review-agent-chip.is-selected,
+.review-agent-chip:hover {
+  color: var(--ink-1);
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.review-note,
+.revision-candidate {
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  padding: var(--space-3);
+}
+
+.review-note--resolved,
+.revision-candidate--accepted {
+  border-color: var(--success);
+}
+
+.revision-candidate--rejected {
+  opacity: 0.65;
+}
+
+.review-panel__empty {
+  margin: auto;
+  max-width: 380px;
+  text-align: center;
+  color: var(--ink-2);
+  padding: var(--space-6);
+}
+
 .knowledge-row span,
 .runtime-row span {
   display: -webkit-box;

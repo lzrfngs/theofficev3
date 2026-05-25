@@ -2,12 +2,13 @@ import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from 
 import { Download, Settings, Trash2, Sun, Moon, Upload } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Agent, ChatMessage, ModelProvider } from './services/coordinator';
-import type { ClaimStatus, EvidenceClaim, FactualClaim, ExecutionTraceRecord, KnowledgeItem, ProjectLibrary, ProjectMemorySnapshot, RunEvaluation, RunState, SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
+import type { ClaimStatus, DeliverableSection, EvidenceClaim, FactualClaim, ExecutionTraceRecord, KnowledgeItem, ProjectLibrary, ProjectMemorySnapshot, ReviewNote, RevisionCandidate, RunEvaluation, RunState, SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
 import {
   INITIAL_AGENTS,
   loadAgentSystemPrompts,
   runAuthoredWorkflow,
-  runMultiAgentPipeline
+  runMultiAgentPipeline,
+  runTargetedRevision
 } from './services/coordinator';
 import { AgentPanel } from './components/AgentPanel';
 import { WorkflowCanvas } from './components/WorkflowCanvas';
@@ -15,10 +16,11 @@ import { OutputPanel } from './components/OutputPanel';
 import { SourcesPanel } from './components/SourcesPanel';
 import { IntelligencePanel } from './components/IntelligencePanel';
 import { ProjectsPanel } from './components/ProjectsPanel';
+import { ReviewPanel } from './components/ReviewPanel';
 import { SettingsModal, type ProviderStatus } from './components/SettingsModal';
 import { EditProfileModal } from './components/EditProfileModal';
 
-type WorkspaceView = 'canvas' | 'output' | 'sources' | 'intelligence' | 'projects';
+type WorkspaceView = 'canvas' | 'output' | 'sources' | 'intelligence' | 'review' | 'projects';
 
 const storageKeys = {
   messages: 'the_office_messages_v1',
@@ -32,6 +34,8 @@ const storageKeys = {
   knowledgeItems: 'the_office_knowledge_items_v1',
   projects: 'the_office_projects_v1',
   activeProjectId: 'the_office_active_project_id_v1',
+  reviewNotes: 'the_office_review_notes_v1',
+  revisionCandidates: 'the_office_revision_candidates_v1',
   stepModelOverrides: 'the_office_step_model_overrides_v1',
   workspaceView: 'the_office_workspace_view_v1'
 };
@@ -75,6 +79,8 @@ function App() {
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(() => loadStoredJson(storageKeys.knowledgeItems, []));
   const [projects, setProjects] = useState<ProjectLibrary[]>(() => loadStoredJson(storageKeys.projects, []));
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => localStorage.getItem(storageKeys.activeProjectId));
+  const [reviewNotes, setReviewNotes] = useState<ReviewNote[]>(() => loadStoredJson(storageKeys.reviewNotes, []));
+  const [revisionCandidates, setRevisionCandidates] = useState<RevisionCandidate[]>(() => loadStoredJson(storageKeys.revisionCandidates, []));
   const [stepModelOverrides, setStepModelOverrides] = useState<Record<string, string>>(() => loadStoredJson(storageKeys.stepModelOverrides, {}));
   const [providerStatuses, setProviderStatuses] = useState<ProviderStatus[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
@@ -152,6 +158,14 @@ function App() {
     if (activeProjectId) localStorage.setItem(storageKeys.activeProjectId, activeProjectId);
     else localStorage.removeItem(storageKeys.activeProjectId);
   }, [activeProjectId]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.reviewNotes, JSON.stringify(reviewNotes));
+  }, [reviewNotes]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.revisionCandidates, JSON.stringify(revisionCandidates));
+  }, [revisionCandidates]);
 
   useEffect(() => {
     localStorage.setItem(storageKeys.stepModelOverrides, JSON.stringify(stepModelOverrides));
@@ -775,6 +789,92 @@ function App() {
     handleSendMessage(`Refine only this section of the strategy/creative platform. Preserve the rest of the deliverable unless a dependency is unavoidable. Improve evidence binding, strategic clarity, creative sharpness, and actionability.\n\nObjective:\n${runState.objective}\n\nSection title:\n${section.title}\n\nCurrent section:\n${section.body}\n\nRelevant claims:\n${runState.factualClaims.map(claim => `- ${claim.status}: ${claim.text}`).join('\n') || '- None'}\n\nReturn the revised section plus any source, assumption, or validation notes.`, true);
   };
 
+  const handleAddReviewNote = (sectionId: string, text: string, agentIds: string[]) => {
+    const note: ReviewNote = {
+      id: `note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      sectionId,
+      text,
+      assignedAgentIds: agentIds,
+      status: 'open',
+      createdAt: new Date().toISOString()
+    };
+    setReviewNotes(prev => [note, ...prev]);
+  };
+
+  const handleResolveReviewNote = (noteId: string) => {
+    setReviewNotes(prev => prev.map(note => note.id === noteId ? { ...note, status: 'resolved' } : note));
+  };
+
+  const handleRequestSectionRevision = async (sectionId: string, noteIds: string[], agentIds: string[]) => {
+    if (!runState || isRunning) return;
+    const section = (runState.deliverableSections ?? []).find(item => item.id === sectionId);
+    if (!section) return;
+    const notes = reviewNotes.filter(note => noteIds.includes(note.id));
+    const assignedAgentIds = agentIds.length > 0 ? agentIds : [...new Set(notes.flatMap(note => note.assignedAgentIds))];
+    setIsRunning(true);
+    try {
+      const result = await runTargetedRevision(
+        runState.objective,
+        section.title,
+        section.body,
+        notes.map(note => note.text),
+        agents,
+        assignedAgentIds,
+        provider,
+        model,
+        getRunSources(),
+        runState
+      );
+      const candidate: RevisionCandidate = {
+        id: `revision-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+        sectionId,
+        noteIds,
+        originalBody: section.body,
+        revisedBody: result.revisedBody,
+        rationale: result.rationale,
+        agentIds: assignedAgentIds,
+        status: 'proposed',
+        createdAt: new Date().toISOString()
+      };
+      setRevisionCandidates(prev => [candidate, ...prev]);
+      setWorkspaceView('review');
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const patchOutputSection = (markdown: string, section: DeliverableSection, revisedBody: string) => {
+    const escapedTitle = section.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`(^##\\s+${escapedTitle}\\s*$)([\\s\\S]*?)(?=^##\\s+|$)`, 'm');
+    if (pattern.test(markdown)) return markdown.replace(pattern, `$1\n\n${revisedBody.trim()}\n\n`);
+    return `${markdown.trim()}\n\n## ${section.title}\n\n${revisedBody.trim()}\n`;
+  };
+
+  const handleAcceptRevisionCandidate = (candidateId: string) => {
+    const candidate = revisionCandidates.find(item => item.id === candidateId);
+    if (!candidate || !runState) return;
+    const section = (runState.deliverableSections ?? []).find(item => item.id === candidate.sectionId);
+    if (!section) return;
+    const updatedSection: DeliverableSection = { ...section, body: candidate.revisedBody, status: 'draft' };
+    setRunState(prev => prev ? {
+      ...prev,
+      deliverableSections: (prev.deliverableSections ?? []).map(item => item.id === updatedSection.id ? updatedSection : item),
+      updatedAt: new Date().toISOString()
+    } : prev);
+    setFinalOutputs(prev => {
+      const latest = prev.at(-1);
+      if (!latest) return prev;
+      const patched = { ...latest, text: patchOutputSection(latest.text, section, candidate.revisedBody) };
+      return [...prev.slice(0, -1), patched];
+    });
+    setRevisionCandidates(prev => prev.map(item => item.id === candidateId ? { ...item, status: 'accepted' } : item));
+    setReviewNotes(prev => prev.map(note => candidate.noteIds.includes(note.id) ? { ...note, status: 'resolved' } : note));
+  };
+
+  const handleRejectRevisionCandidate = (candidateId: string) => {
+    setRevisionCandidates(prev => prev.map(candidate => candidate.id === candidateId ? { ...candidate, status: 'rejected' } : candidate));
+  };
+
   const handleExportWorkspace = () => {
     const snapshot = {
       exportedAt: new Date().toISOString(),
@@ -789,6 +889,8 @@ function App() {
       knowledgeItems,
       projects,
       activeProjectId,
+      reviewNotes,
+      revisionCandidates,
       stepModelOverrides
     };
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
@@ -815,6 +917,8 @@ function App() {
         knowledgeItems: KnowledgeItem[];
         projects: ProjectLibrary[];
         activeProjectId: string | null;
+        reviewNotes: ReviewNote[];
+        revisionCandidates: RevisionCandidate[];
         stepModelOverrides: Record<string, string>;
       }>;
       if (snapshot.messages) setMessages(snapshot.messages);
@@ -828,6 +932,8 @@ function App() {
       if (snapshot.knowledgeItems) setKnowledgeItems(snapshot.knowledgeItems);
       if (snapshot.projects) setProjects(snapshot.projects);
       if ('activeProjectId' in snapshot) setActiveProjectId(snapshot.activeProjectId ?? null);
+      if (snapshot.reviewNotes) setReviewNotes(snapshot.reviewNotes);
+      if (snapshot.revisionCandidates) setRevisionCandidates(snapshot.revisionCandidates);
       if (snapshot.stepModelOverrides) setStepModelOverrides(snapshot.stepModelOverrides);
       confetti({ particleCount: 40, spread: 55, origin: { y: 0.75 } });
     } catch (error) {
@@ -887,6 +993,13 @@ function App() {
                 Run
               </button>
               <button
+                className={`workspace-tab ${workspaceView === 'review' ? 'is-active' : ''}`}
+                type="button"
+                onClick={() => setWorkspaceView('review')}
+              >
+                Review
+              </button>
+              <button
                 className={`workspace-tab ${workspaceView === 'projects' ? 'is-active' : ''}`}
                 type="button"
                 onClick={() => setWorkspaceView('projects')}
@@ -933,6 +1046,19 @@ function App() {
                 onSetClaimStatus={handleSetClaimStatus}
                 onResearchClaim={handleResearchClaim}
                 onChallengeClaim={handleChallengeClaim}
+              />
+            ) : workspaceView === 'review' ? (
+              <ReviewPanel
+                sections={runState?.deliverableSections ?? []}
+                notes={reviewNotes}
+                candidates={revisionCandidates}
+                agents={agents}
+                isRunning={isRunning}
+                onAddNote={handleAddReviewNote}
+                onRequestRevision={handleRequestSectionRevision}
+                onAcceptCandidate={handleAcceptRevisionCandidate}
+                onRejectCandidate={handleRejectRevisionCandidate}
+                onResolveNote={handleResolveReviewNote}
               />
             ) : (
               <ProjectsPanel

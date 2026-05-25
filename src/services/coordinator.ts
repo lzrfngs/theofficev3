@@ -1812,6 +1812,85 @@ export async function runAuthoredWorkflow(
   onStep(manager.id, { id: uuid(), sender: manager.name, role: 'agent', text: 'Output is ready.', timestamp: getTimestamp() });
 }
 
+export async function runTargetedRevision(
+  userQuery: string,
+  sectionTitle: string,
+  originalSection: string,
+  notes: string[],
+  agents: Agent[],
+  agentIds: string[],
+  provider: ModelProvider,
+  model: string,
+  sources: SourceRecord[] = [],
+  runState?: RunState | null
+) {
+  const activeAgents = agents.some(agent => agent.systemPrompt) ? agents : await loadAgentSystemPrompts(agents);
+  const selectedAgents = activeAgents.filter(agent => agentIds.includes(agent.id));
+  const manager = getCoordinator(activeAgents);
+  const specialistContext = selectedAgents.length > 0
+    ? selectedAgents.map(agent => `\n## ${agent.name} (${agent.title})\n${agent.systemPrompt || ''}`).join('\n')
+    : `\n## ${manager.name} (${manager.title})\n${manager.systemPrompt || ''}`;
+
+  const prompt = `
+You are running a targeted revision, not a full workflow rerun.
+
+Objective:
+${userQuery}
+
+Section to revise:
+${sectionTitle}
+
+Original section:
+${originalSection}
+
+User notes:
+${notes.map(note => `- ${note}`).join('\n') || '- Improve this section.'}
+
+Relevant run context:
+${runState ? `${formatEvidencePolicyForPrompt(runState.evidencePolicy, runState.factualClaims)}${formatResearchBriefForPrompt(runState.researchBrief)}\nOpen questions: ${runState.openQuestions.join('; ') || 'none'}\nRisks: ${runState.risks.join('; ') || 'none'}` : 'No run context supplied.'}
+${formatSourcesForPrompt(sources)}
+
+Specialist perspectives to use:
+${specialistContext}
+
+Return only JSON in this shape:
+{
+  "revisedBody": "full revised section markdown, without repeating the section heading",
+  "rationale": "short explanation of what changed and why"
+}
+
+Rules:
+- Preserve the section's job in the larger artifact.
+- Do not rewrite unrelated sections.
+- Address the user notes directly.
+- Keep evidence labels and assumptions clear.
+- If Stephen is involved, improve taste, tension, memorability, and line quality.
+- If August is involved, improve the creative system and avoid literal visual ideas.
+`;
+
+  const raw = await callModel(provider, model, manager.systemPrompt || '', prompt, 4096);
+  const parsed = extractRevisionJson(raw);
+  return parsed ?? { revisedBody: raw, rationale: 'Model returned markdown instead of structured revision JSON.' };
+}
+
+function extractRevisionJson(rawText: string): { revisedBody: string; rationale: string } | null {
+  const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  const candidate = firstBrace !== -1 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;
+
+  try {
+    const parsed = JSON.parse(candidate) as Partial<{ revisedBody: string; rationale: string }>;
+    if (typeof parsed.revisedBody !== 'string') return null;
+    return {
+      revisedBody: parsed.revisedBody,
+      rationale: typeof parsed.rationale === 'string' ? parsed.rationale : 'Revision generated.'
+    };
+  } catch {
+    return null;
+  }
+}
+
 function sortWorkflowNodes(nodes: WorkflowCanvasNode[], edges: WorkflowCanvasEdge[]) {
   const sorted: WorkflowCanvasNode[] = [];
   const remaining = [...nodes];

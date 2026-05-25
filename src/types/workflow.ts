@@ -175,6 +175,27 @@ export interface ProjectLibrary {
   runIds: string[];
 }
 
+export interface ReviewNote {
+  id: string;
+  sectionId: string;
+  text: string;
+  assignedAgentIds: string[];
+  status: 'open' | 'resolved';
+  createdAt: string;
+}
+
+export interface RevisionCandidate {
+  id: string;
+  sectionId: string;
+  noteIds: string[];
+  originalBody: string;
+  revisedBody: string;
+  rationale: string;
+  agentIds: string[];
+  status: 'proposed' | 'accepted' | 'rejected';
+  createdAt: string;
+}
+
 export interface ExecutionTraceRecord {
   id: string;
   runId: string;

@@ -27,6 +27,7 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Active project sources are fed into future workflow runs.
 - The Run tab now supports claim-level accept, assume, reject, research, and challenge actions.
 - Manual sources are ingested through `/api/ingest` before being stored.
+- The Review tab now supports section-level notes, specialist assignment, targeted revisions, accept/reject decisions, and patching accepted revisions into the current Output artifact.
 - Nora, a measurement and growth analyst, has been added to own KPIs, experiments, dashboards, success criteria, and learning agendas.
 - Penny now applies mandatory routing gates for audience/culture review, technical feasibility, futures/scenario review, and measurement/growth review.
 - Stephen's writing instructions now require sharper copy discipline: human tension, point of view, multiple territories, line banks, voice rules, taboo phrases, and a visible rewrite pass.
@@ -52,6 +53,7 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Source ingestion uses simple readability cleanup, not a full browser renderer or PDF parser.
 - Projects are still localStorage-backed rather than database-backed.
 - Claim controls update local state and project memory, but do not yet create a formal audit trail per claim decision.
+- Review revisions patch the latest markdown output and section state, but do not yet provide visual diff highlighting.
 - Mandatory routing gates improve coverage, but they can increase token/cost load on broad briefs.
 - Nora currently reuses the strategist portrait until a dedicated portrait is added.
 - Stephen is now prompted more rigorously, but actual quality should be tested with real creative briefs and compared against prior outputs.
