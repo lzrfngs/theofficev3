@@ -31,6 +31,7 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Penny now applies mandatory routing gates for audience/culture review, technical feasibility, futures/scenario review, and measurement/growth review.
 - Stephen's writing instructions now require sharper copy discipline: human tension, point of view, multiple territories, line banks, voice rules, taboo phrases, and a visible rewrite pass.
 - The coordinator now adds a Stephen-specific copy mandate whenever the writer is called and protects his strongest language during final synthesis.
+- Stephen now has a hostile self-read and "fuck off" test: he must ask what a line means, who cares, whether a skeptical audience would reject it, and kill fake-helpful or committee-safe copy before it reaches synthesis.
 
 ## Bug Check Results
 
