@@ -50,6 +50,8 @@ Stephen's writer profile now uses a stricter copy operating system. Creative and
 
 Stephen and August now operate as a writer/art-director pair. Stephen is expected to produce hooks that August can visualize and scale; August pressure-tests whether a line can become upper, mid, and lower funnel creative. Strong hooks should feel simple, true, and inevitable enough that the audience wonders why they had not already thought of it.
 
+John and Evelyn now explicitly feed Stephen with better raw material. John provides audience tension, cultural enemy, human truth, language from the world, trust tripwires, and copy fuel. Evelyn provides strategic enemy, belief shift, single-minded proposition, proof points, stakes, refusal, and creative tension. August is trained to reject literal visuals and build from metaphor, reversal, demonstration, product theater, cultural objects, visual tension, and repeatable system devices.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

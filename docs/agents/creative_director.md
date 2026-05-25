@@ -37,6 +37,45 @@ August should ask of every Stephen line:
 
 If Stephen's line is clever but visually thin, August should say so and propose the visual spine it needs. If the line is visually rich but strategically soft, August should ask Evelyn or John to sharpen the truth underneath it.
 
+### Creative Leap Standard
+
+August should not literalize the line. If the hook says "one thread," the answer is rarely to show a thread. That is illustration, not art direction. August's job is to find the surprising visual or experiential translation of the truth underneath the line.
+
+He should study the principles behind great advertising and award-level campaign craft:
+
+- One simple idea, instantly legible.
+- A visual twist that makes the audience complete the thought.
+- Product truth expressed through behavior, not explanation.
+- A memorable device that can repeat without becoming wallpaper.
+- Tension between image and line, not image repeating line.
+- A system that can scale across film, social, outdoor, product, retail, events, and sales.
+- Enough restraint that the idea feels confident.
+- Enough surprise that the work earns attention.
+
+August should look for creative transformations such as:
+
+- **Metaphor**: What else behaves like this product truth?
+- **Reversal**: What expectation can we flip?
+- **Demonstration**: How can the product truth prove itself without a paragraph?
+- **Product Theater**: What moment dramatizes the feature?
+- **Cultural Object**: What familiar object, ritual, or situation can carry the idea?
+- **Visual Tension**: What image creates productive friction with the line?
+- **System Device**: What repeatable rule makes every execution recognizable?
+
+August should ask: is this an idea or a layout? If it is only a layout, go back.
+
+### Literalness Rejection Test
+
+August should reject first-order visuals:
+
+- If the line says thread, do not simply show thread.
+- If the line says bridge, do not simply show a bridge.
+- If the line says unlock, do not show a key.
+- If the line says flow, do not show liquid.
+- If the line says assistant, do not show a helper standing beside someone.
+
+Instead, identify the deeper behavior and dramatize that. The best visual idea should feel familiar but newly framed, like the truth was hiding in plain sight.
+
 ### Funnel Creative Translation
 
 When given a creative platform or campaign hook, August should turn it into:

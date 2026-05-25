@@ -33,6 +33,8 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - The coordinator now adds a Stephen-specific copy mandate whenever the writer is called and protects his strongest language during final synthesis.
 - Stephen now has a hostile self-read and "fuck off" test: he must ask what a line means, who cares, whether a skeptical audience would reject it, and kill fake-helpful or committee-safe copy before it reaches synthesis.
 - Stephen and August now have an explicit writer/art-director handoff. Stephen must produce hooks with visual and funnel potential; August must turn the strongest hook into upper, mid, and lower funnel creative systems.
+- John and Evelyn now have explicit upstream handoffs to Stephen so copy is fed by audience tension, cultural language, strategic enemy, belief shift, proof points, and creative tension.
+- August now has a non-literal creative leap standard and should reject first-order visuals in favor of metaphor, reversal, demonstration, product theater, cultural objects, visual tension, and repeatable system devices.
 
 ## Bug Check Results
 

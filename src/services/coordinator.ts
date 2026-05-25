@@ -549,12 +549,20 @@ function buildDelegationPrompt(userQuery: string, delegation: NormalizedDelegati
 }
 
 function formatAgentSpecificBrief(agentRole: string) {
+  if (agentRole === 'strategist') {
+    return `\n\nEvelyn-to-Stephen handoff mandate:\n- If this work will become messaging, campaign, GTM narrative, or creative platform, give Stephen a strategic enemy, audience belief shift, single-minded proposition, concrete proof points, stakes, refusal, and creative tension.\n- Do not hand Stephen generic positioning prose. Give him pressure he can write from.`;
+  }
+
+  if (agentRole === 'anthropologist') {
+    return `\n\nJohn-to-Stephen handoff mandate:\n- If this work will become messaging, campaign, GTM narrative, or creative platform, give Stephen audience tension, cultural enemy, human truth, language from the world, trust tripwires, permission notes, and copy fuel.\n- Help Stephen write from lived behavior and culture, not from product features alone.`;
+  }
+
   if (agentRole === 'writer') {
     return `\n\nStephen-specific copy mandate:\n- Do not summarize the strategy as copy. Turn it into language with tension, point of view, and memorability.\n- Produce three distinct creative territories before choosing one.\n- Include a line bank with at least 12 usable lines across headlines, taglines, CTAs, social hooks, and product/lifecycle copy.\n- Include voice rules and taboo phrases.\n- Include one weak generic line rewritten into a sharper line with rationale.\n- Apply the hostile self-read: What does that even mean? Who cares? Would a smart, skeptical audience tell this brand to fuck off?\n- Kill lines that sound vague, pompous, fake-helpful, self-congratulatory, overbalanced, or committee-approved.\n- Each territory must include a simple hook August can turn into upper, mid, and lower funnel creative.\n- The best line should feel so true that the audience thinks: how did I not think of that?\n- Avoid mush words like empower, unlock, seamless, innovative, reimagine, transform, next-generation, supercharge, elevate, robust, solution, leverage, at scale, future of, and generic AI-powered claims.\n- Make every major line specific to this brand, audience, product, evidence, or cultural tension.`;
   }
 
   if (agentRole === 'creative_director') {
-    return `\n\nAugust-specific writer/art-director mandate:\n- Treat Stephen's best line as raw creative material, not decoration.\n- Pressure-test whether the hook can become a visual system across upper, mid, and lower funnel.\n- If the line cannot produce a poster, film/social idea, landing-page system, product moment, and sales/deck expression, say so and propose a stronger creative spine.\n- Build from one simple, true hook that feels obvious in hindsight.\n- Show how the line becomes image logic, layout, motion, typography, proof, CTA behavior, and channel formats.\n- Name what would make the idea distinctive, not just attractive.`;
+    return `\n\nAugust-specific writer/art-director mandate:\n- Treat Stephen's best line as raw creative material, not decoration.\n- Do not literalize the line. If the hook says thread, do not simply show a thread. Find the deeper behavior and dramatize that.\n- Pressure-test whether the hook can become a visual system across upper, mid, and lower funnel.\n- If the line cannot produce a poster, film/social idea, landing-page system, product moment, and sales/deck expression, say so and propose a stronger creative spine.\n- Build from one simple, true hook that feels obvious in hindsight.\n- Use metaphor, reversal, demonstration, product theater, cultural objects, visual tension, or a repeatable system device to create spark.\n- Show how the line becomes image logic, layout, motion, typography, proof, CTA behavior, and channel formats.\n- Name what would make the idea distinctive, not just attractive.`;
   }
 
   return '';
