@@ -19,8 +19,38 @@ interface IntelligencePanelProps {
 
 type IntelligenceTab = 'state' | 'knowledge' | 'trace' | 'eval';
 
+function getTabHeader(tab: IntelligenceTab) {
+  if (tab === 'knowledge') {
+    return {
+      eyebrow: 'Evidence',
+      title: 'Knowledge Base',
+      subtitle: 'Sources, claims, and reusable knowledge captured from the run.'
+    };
+  }
+  if (tab === 'trace') {
+    return {
+      eyebrow: 'Execution',
+      title: 'Run Trace',
+      subtitle: 'Planner decisions, tool calls, agent steps, critique, and synthesis events.'
+    };
+  }
+  if (tab === 'eval') {
+    return {
+      eyebrow: 'Evaluation',
+      title: 'Review & Repair',
+      subtitle: 'Quality checks, user ratings, and targeted repair actions.'
+    };
+  }
+  return {
+    eyebrow: 'Runtime',
+    title: 'Intelligence State',
+    subtitle: 'Objective, evidence policy, claims, research brief, scorecard, and project memory.'
+  };
+}
+
 export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, evidenceClaims, knowledgeItems, traces, onClear, onRateRun, onResearchEvidence, onChallengeOutput, onRefineSection, onSetClaimStatus, onResearchClaim, onChallengeClaim }) => {
   const [tab, setTab] = useState<IntelligenceTab>('state');
+  const header = getTabHeader(tab);
   const latestEvaluation = runState?.evaluations.at(-1);
   const evidencePolicy = runState?.evidencePolicy ?? { required: false, status: 'not-required' as const, reasons: [], requiredToolIds: [] };
   const factualClaims = runState?.factualClaims ?? [];
@@ -37,8 +67,9 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
     <section className="intelligence-panel" aria-label="Run intelligence state">
       <div className="intelligence-panel__header">
         <div>
-          <div className="intelligence-panel__eyebrow">Runtime</div>
-          <h2 className="intelligence-panel__title">Intelligence State</h2>
+          <div className="intelligence-panel__eyebrow">{header.eyebrow}</div>
+          <h2 className="intelligence-panel__title">{header.title}</h2>
+          <p className="intelligence-panel__subtitle">{header.subtitle}</p>
         </div>
         <button className="btn btn--secondary btn--sm" type="button" onClick={onClear}>Clear state</button>
       </div>

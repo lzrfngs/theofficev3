@@ -922,6 +922,14 @@ button.agent-roster__item {
   font-weight: 500;
 }
 
+.intelligence-panel__subtitle {
+  margin: var(--space-1) 0 0;
+  max-width: 620px;
+  color: var(--ink-2);
+  font-size: var(--fs-12);
+  line-height: 1.4;
+}
+
 .intelligence-panel__tabs {
   display: flex;
   gap: 2px;
