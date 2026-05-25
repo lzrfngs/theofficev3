@@ -52,6 +52,8 @@ npm install
 npm run dev
 ```
 
+Vite runs local middleware for `/api/generate` and `/api/search`, so the normal dev server can exercise the same server-side router shape used on Vercel. Add local provider keys to `.env` when testing live model calls, for example `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GITHUB_MODELS_TOKEN`, or `TAVILY_API_KEY`.
+
 ## Build
 
 ```bash

@@ -159,7 +159,7 @@ async function callModel(provider: ModelProvider, model: string, systemInstructi
     })
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<{ text?: string; error?: string }>(response, 'model router');
   if (!response.ok) {
     throw new Error(data?.error || `Model router error (${response.status})`);
   }
@@ -177,7 +177,7 @@ async function searchWeb(query: string, usedBy: string): Promise<SourceRecord[]>
   });
 
   if (!response.ok) return [];
-  const data = await response.json();
+  const data = await readJsonResponse<{ results?: Array<{ title: string; url: string; snippet: string; provider: SourceRecord['provider'] }> }>(response, 'search router');
   return (data?.results ?? []).map((result: { title: string; url: string; snippet: string; provider: SourceRecord['provider'] }, index: number) => ({
     id: `${usedBy}-${Date.now().toString(36)}-${index}`,
     title: result.title,
@@ -188,6 +188,20 @@ async function searchWeb(query: string, usedBy: string): Promise<SourceRecord[]>
     usedBy,
     timestamp: new Date().toISOString()
   }));
+}
+
+async function readJsonResponse<T>(response: Response, label: string): Promise<T> {
+  const rawText = await response.text();
+  if (!rawText.trim()) {
+    throw new Error(`Empty response from ${label} (${response.status}). In local development, run Vite with the local API middleware enabled and confirm server environment variables are available.`);
+  }
+
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    const preview = rawText.replace(/\s+/g, ' ').trim().slice(0, 220);
+    throw new Error(`Invalid JSON from ${label} (${response.status}): ${preview || 'no response body'}`);
+  }
 }
 
 function formatSourcesForPrompt(sources: SourceRecord[]) {

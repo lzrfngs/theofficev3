@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
     if (!response.ok) throw new Error(data?.error?.message || `OpenAI image error ${response.status}`);
 
     const image = data?.data?.[0]?.b64_json;
@@ -65,5 +65,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json({ image, mimeType: 'image/png' });
   } catch (error) {
     res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown image generation error' });
+  }
+}
+
+async function readJsonResponse(response: Response): Promise<{ data?: Array<{ b64_json?: string }>; error?: { message?: string } }> {
+  const rawText = await response.text();
+  if (!rawText.trim()) return { error: { message: `OpenAI image API returned an empty response body (${response.status})` } };
+
+  try {
+    return JSON.parse(rawText) as { data?: Array<{ b64_json?: string }>; error?: { message?: string } };
+  } catch {
+    return { error: { message: `OpenAI image API returned non-JSON response (${response.status}): ${rawText.replace(/\s+/g, ' ').trim().slice(0, 240)}` } };
   }
 }

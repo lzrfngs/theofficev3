@@ -69,7 +69,7 @@ async function searchTavily(query: string, maxResults: number): Promise<SearchRe
     })
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse(response);
   if (!response.ok) throw new Error(data?.error || data?.message || `Tavily error ${response.status}`);
 
   return (data?.results ?? []).map((result: { title?: string; url?: string; content?: string }) => ({
@@ -78,4 +78,15 @@ async function searchTavily(query: string, maxResults: number): Promise<SearchRe
     snippet: result.content || '',
     provider: 'tavily'
   })).filter((result: SearchResult) => result.url);
+}
+
+async function readJsonResponse(response: Response): Promise<{ results?: Array<{ title?: string; url?: string; content?: string }>; error?: string; message?: string }> {
+  const rawText = await response.text();
+  if (!rawText.trim()) return { error: `Tavily returned an empty response body (${response.status})` };
+
+  try {
+    return JSON.parse(rawText) as { results?: Array<{ title?: string; url?: string; content?: string }>; error?: string; message?: string };
+  } catch {
+    return { error: `Tavily returned non-JSON response (${response.status}): ${rawText.replace(/\s+/g, ' ').trim().slice(0, 240)}` };
+  }
 }

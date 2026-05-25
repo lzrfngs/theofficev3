@@ -22,6 +22,18 @@ interface VercelRequest {
   body?: GenerateRequest;
 }
 
+interface GeminiResponse {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+}
+
+interface ChatCompletionResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+}
+
+interface AnthropicResponse {
+  content?: Array<{ type: string; text?: string }>;
+}
+
 const defaultProvider = (process.env.MODEL_PROVIDER as ModelProvider | undefined) ?? 'gemini';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -89,7 +101,7 @@ async function callGemini(request: Required<GenerateRequest>) {
     })
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<GeminiResponse>(response, 'Gemini');
   if (!response.ok) throw new Error(formatProviderError(data, `Gemini error ${response.status}`));
 
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -117,7 +129,7 @@ async function callOpenAI(request: Required<GenerateRequest>, endpoint: string, 
     })
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<ChatCompletionResponse>(response, request.provider);
   if (!response.ok) throw new Error(formatProviderError(data, `${request.provider} error ${response.status}`));
 
   const text = data?.choices?.[0]?.message?.content;
@@ -145,7 +157,7 @@ async function callAnthropic(request: Required<GenerateRequest>) {
     })
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<AnthropicResponse>(response, 'Anthropic');
   if (!response.ok) throw new Error(formatProviderError(data, `Anthropic error ${response.status}`));
 
   const text = data?.content?.map((part: { type: string; text?: string }) => part.type === 'text' ? part.text : '').join('').trim();
@@ -179,7 +191,7 @@ async function callAzureOpenAI(request: Required<GenerateRequest>) {
     })
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<ChatCompletionResponse>(response, 'Azure OpenAI');
   if (!response.ok) throw new Error(formatProviderError(data, `Azure OpenAI error ${response.status}`));
 
   const text = data?.choices?.[0]?.message?.content;
@@ -215,6 +227,17 @@ function formatProviderError(data: unknown, fallback: string): string {
 
   const parts = [message, code && `code: ${code}`, type && `type: ${type}`, param && `param: ${param}`].filter(Boolean);
   return parts.length > 0 ? parts.join(' | ') : JSON.stringify(error);
+}
+
+async function readJsonResponse<T>(response: Response, providerName: string): Promise<T> {
+  const rawText = await response.text();
+  if (!rawText.trim()) return { error: `${providerName} returned an empty response body (${response.status})` } as T;
+
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    return { error: `${providerName} returned non-JSON response (${response.status}): ${rawText.replace(/\s+/g, ' ').trim().slice(0, 240)}` } as T;
+  }
 }
 
 function stringifyErrorField(value: unknown): string {
