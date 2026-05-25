@@ -150,7 +150,7 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edg
     return (
       <section
         className="workflow-canvas workflow-canvas--empty"
-        aria-label="Workflow canvas"
+        aria-label="Team workflow"
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault();
@@ -159,11 +159,11 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edg
           onAgentDrop?.(agentId, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
         }}
       >
-        <div className="workflow-canvas__toolbar" aria-label="Canvas actions">
+        <div className="workflow-canvas__toolbar" aria-label="Team actions">
           <button className="btn btn--primary btn--sm" type="button" onClick={onRunFlow} disabled={!canRun || isRunning}>Run flow</button>
         </div>
         <div className="workflow-canvas__empty">
-          <div className="workflow-canvas__empty-title">Canvas ready</div>
+          <div className="workflow-canvas__empty-title">Team ready</div>
           <div className="workflow-canvas__empty-copy">Give Penny a task and she will assemble the right team here.</div>
         </div>
       </section>
@@ -171,8 +171,8 @@ const WorkflowCanvasInner: React.FC<WorkflowCanvasProps> = ({ agents, nodes, edg
   }
 
   return (
-    <section className="workflow-canvas" aria-label="Workflow canvas">
-      <div className="workflow-canvas__toolbar" aria-label="Canvas actions">
+    <section className="workflow-canvas" aria-label="Team workflow">
+      <div className="workflow-canvas__toolbar" aria-label="Team actions">
         {selectedEdgeId && selectedEdgeId !== 'request-manager' && (
           <button className="btn btn--danger btn--sm" type="button" onClick={onDeleteEdge}>Delete connection</button>
         )}

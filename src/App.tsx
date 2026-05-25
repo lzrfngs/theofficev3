@@ -839,7 +839,7 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Main workspace: Penny plus workflow canvas */}
+      {/* Main workspace: Penny plus team workflow */}
       <main className="workspace-grid">
         <div className="left-column">
           <div className="h-full relative">
@@ -863,7 +863,7 @@ function App() {
                 type="button"
                 onClick={() => setWorkspaceView('canvas')}
               >
-                Canvas
+                Team
               </button>
               <button
                 className={`workspace-tab ${workspaceView === 'output' ? 'is-active' : ''}`}

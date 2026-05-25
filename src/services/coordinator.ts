@@ -1646,9 +1646,9 @@ export async function runAuthoredWorkflow(
     reviewer: 'system',
     rating: Object.values(nodeOutputs).some(output => output.startsWith('Error:')) ? 2 : 3,
     summary: Object.values(nodeOutputs).some(output => output.startsWith('Error:')) ? 'Authored workflow completed with at least one step error.' : 'Authored workflow completed and is ready for synthesis.',
-    strengths: ['Authored execution used the visible canvas graph.'],
+    strengths: ['Authored execution used the visible team graph.'],
     gaps: Object.values(nodeOutputs).some(output => output.startsWith('Error:')) ? ['Review failed steps before relying on the synthesis.'] : [],
-    nextActions: ['Review final synthesis and rerun any weak step from the canvas.'],
+    nextActions: ['Review final synthesis and rerun any weak step from the team workflow.'],
     timestamp: new Date().toISOString()
   };
   updateRunState(runState, runtimeOptions, { evaluations: [...runState.evaluations, authoredEvaluation], summary: authoredEvaluation.summary });
