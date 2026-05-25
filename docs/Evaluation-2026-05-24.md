@@ -23,6 +23,10 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Claim-source matching now scores factual claims against source chunks and stores best supporting quotes.
 - Final scorecards now use a model-graded evaluator pass with heuristic fallback.
 - Completed runs now include a portable project library with memories, accepted claims, and enriched source records.
+- The Projects tab now persists local project libraries with run memories, enriched sources, accepted/rejected claims, open questions, and deliverable sections.
+- Active project sources are fed into future workflow runs.
+- The Run tab now supports claim-level accept, assume, reject, research, and challenge actions.
+- Manual sources are ingested through `/api/ingest` before being stored.
 
 ## Bug Check Results
 
@@ -38,6 +42,8 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Claim extraction is deterministic and heuristic. It is useful, but not yet a model-graded claim parser.
 - Claim-source matching is lexical/chunk-based, not embedding-based semantic retrieval.
 - Source ingestion uses simple readability cleanup, not a full browser renderer or PDF parser.
+- Projects are still localStorage-backed rather than database-backed.
+- Claim controls update local state and project memory, but do not yet create a formal audit trail per claim decision.
 - Web search can be triggered by policy, but the tool registry is still runtime-internal rather than a full agent-request protocol.
 - Import/export provides portable persistence, but there is still no backend project database or searchable run history.
 - The critique loop is bounded to keep cost and runaway behavior under control; deeper iterative re-planning will need user controls and budget limits.

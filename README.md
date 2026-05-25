@@ -42,6 +42,8 @@ Final synthesis now targets a fixed strategy and creative platform schema: execu
 
 Source grounding now includes `/api/ingest`, which fetches readable text from source URLs or user-provided text, cleans it, chunks it, and stores summaries on source records. Factual claims are matched against source chunks with support scores and quotes. Final scorecards can be model-graded with a heuristic fallback, and completed runs create a portable project library containing memories, accepted claims, and enriched sources.
 
+Projects are now a first-class local workspace concept. The Projects tab can create/select projects, save the current run, retain enriched sources, accepted and rejected claims, open questions, deliverable sections, and run memories. Active project sources are fed into future runs. The Run tab also exposes claim controls for accepting, assuming, rejecting, researching, or challenging individual claims.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

@@ -3,7 +3,7 @@ import type { SourceRecord } from '../types/workflow';
 
 interface SourcesPanelProps {
   sources: SourceRecord[];
-  onAddSource: (source: Omit<SourceRecord, 'id' | 'timestamp' | 'provider'>) => void;
+  onAddSource: (source: Omit<SourceRecord, 'id' | 'timestamp' | 'provider'>) => void | Promise<void>;
   onClearSources: () => void;
 }
 
@@ -12,10 +12,10 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({ sources, onAddSource
   const [url, setUrl] = useState('');
   const [snippet, setSnippet] = useState('');
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!title.trim() && !url.trim() && !snippet.trim()) return;
-    onAddSource({
+    await onAddSource({
       title: title.trim() || url.trim() || 'Manual source',
       url: url.trim(),
       snippet: snippet.trim(),

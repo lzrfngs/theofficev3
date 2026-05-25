@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Activity, Brain, CheckCircle2, Database, ListChecks, Search, Wrench } from 'lucide-react';
-import type { EvidenceClaim, ExecutionTraceRecord, KnowledgeItem, RunState } from '../types/workflow';
+import type { ClaimStatus, EvidenceClaim, ExecutionTraceRecord, KnowledgeItem, RunState } from '../types/workflow';
 
 interface IntelligencePanelProps {
   runState?: RunState | null;
@@ -12,11 +12,14 @@ interface IntelligencePanelProps {
   onResearchEvidence: () => void;
   onChallengeOutput: () => void;
   onRefineSection: (sectionId: string) => void;
+  onSetClaimStatus: (claimId: string, status: ClaimStatus) => void;
+  onResearchClaim: (claimId: string) => void;
+  onChallengeClaim: (claimId: string) => void;
 }
 
 type IntelligenceTab = 'state' | 'knowledge' | 'trace' | 'eval';
 
-export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, evidenceClaims, knowledgeItems, traces, onClear, onRateRun, onResearchEvidence, onChallengeOutput, onRefineSection }) => {
+export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, evidenceClaims, knowledgeItems, traces, onClear, onRateRun, onResearchEvidence, onChallengeOutput, onRefineSection, onSetClaimStatus, onResearchClaim, onChallengeClaim }) => {
   const [tab, setTab] = useState<IntelligenceTab>('state');
   const latestEvaluation = runState?.evaluations.at(-1);
   const evidencePolicy = runState?.evidencePolicy ?? { required: false, status: 'not-required' as const, reasons: [], requiredToolIds: [] };
@@ -83,6 +86,13 @@ export const IntelligencePanel: React.FC<IntelligencePanelProps> = ({ runState, 
                   {claim.matches && claim.matches.length > 0 && (
                     <small>{claim.matches.length} source matches · best score {claim.matches[0].score}/1</small>
                   )}
+                  <div className="claim-actions">
+                    <button className="btn btn--secondary btn--sm" type="button" onClick={() => onSetClaimStatus(claim.id, 'supported')}>Accept</button>
+                    <button className="btn btn--secondary btn--sm" type="button" onClick={() => onSetClaimStatus(claim.id, 'assumption')}>Assume</button>
+                    <button className="btn btn--secondary btn--sm" type="button" onClick={() => onSetClaimStatus(claim.id, 'unverified')}>Reject</button>
+                    <button className="btn btn--secondary btn--sm" type="button" onClick={() => onResearchClaim(claim.id)}>Research</button>
+                    <button className="btn btn--secondary btn--sm" type="button" onClick={() => onChallengeClaim(claim.id)}>Challenge</button>
+                  </div>
                 </div>
               </article>
             ))}

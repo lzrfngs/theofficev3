@@ -813,7 +813,11 @@ function createProjectLibrary(runState: RunState, sources: SourceRecord[], memor
     updatedAt: new Date().toISOString(),
     memories: [memory],
     sources,
-    acceptedClaims: runState.factualClaims.filter(claim => claim.status === 'supported')
+    acceptedClaims: runState.factualClaims.filter(claim => claim.status === 'supported'),
+    rejectedClaims: [],
+    openQuestions: runState.openQuestions,
+    deliverableSections: runState.deliverableSections,
+    runIds: [runState.id]
   };
 }
 

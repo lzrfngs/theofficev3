@@ -169,6 +169,10 @@ export interface ProjectLibrary {
   memories: ProjectMemorySnapshot[];
   sources: SourceRecord[];
   acceptedClaims: FactualClaim[];
+  rejectedClaims: FactualClaim[];
+  openQuestions: string[];
+  deliverableSections: DeliverableSection[];
+  runIds: string[];
 }
 
 export interface ExecutionTraceRecord {

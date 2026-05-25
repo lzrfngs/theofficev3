@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from 
 import { Download, Settings, Trash2, Sun, Moon, Upload } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Agent, ChatMessage, ModelProvider } from './services/coordinator';
-import type { EvidenceClaim, ExecutionTraceRecord, KnowledgeItem, RunEvaluation, RunState, SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
+import type { ClaimStatus, EvidenceClaim, FactualClaim, ExecutionTraceRecord, KnowledgeItem, ProjectLibrary, ProjectMemorySnapshot, RunEvaluation, RunState, SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
 import {
   INITIAL_AGENTS,
   loadAgentSystemPrompts,
@@ -14,10 +14,11 @@ import { WorkflowCanvas } from './components/WorkflowCanvas';
 import { OutputPanel } from './components/OutputPanel';
 import { SourcesPanel } from './components/SourcesPanel';
 import { IntelligencePanel } from './components/IntelligencePanel';
+import { ProjectsPanel } from './components/ProjectsPanel';
 import { SettingsModal, type ProviderStatus } from './components/SettingsModal';
 import { EditProfileModal } from './components/EditProfileModal';
 
-type WorkspaceView = 'canvas' | 'output' | 'sources' | 'intelligence';
+type WorkspaceView = 'canvas' | 'output' | 'sources' | 'intelligence' | 'projects';
 
 const storageKeys = {
   messages: 'the_office_messages_v1',
@@ -29,6 +30,8 @@ const storageKeys = {
   traces: 'the_office_traces_v1',
   evidenceClaims: 'the_office_evidence_claims_v1',
   knowledgeItems: 'the_office_knowledge_items_v1',
+  projects: 'the_office_projects_v1',
+  activeProjectId: 'the_office_active_project_id_v1',
   stepModelOverrides: 'the_office_step_model_overrides_v1',
   workspaceView: 'the_office_workspace_view_v1'
 };
@@ -70,6 +73,8 @@ function App() {
   const [traces, setTraces] = useState<ExecutionTraceRecord[]>(() => loadStoredJson(storageKeys.traces, []));
   const [evidenceClaims, setEvidenceClaims] = useState<EvidenceClaim[]>(() => loadStoredJson(storageKeys.evidenceClaims, []));
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(() => loadStoredJson(storageKeys.knowledgeItems, []));
+  const [projects, setProjects] = useState<ProjectLibrary[]>(() => loadStoredJson(storageKeys.projects, []));
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => localStorage.getItem(storageKeys.activeProjectId));
   const [stepModelOverrides, setStepModelOverrides] = useState<Record<string, string>>(() => loadStoredJson(storageKeys.stepModelOverrides, {}));
   const [providerStatuses, setProviderStatuses] = useState<ProviderStatus[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
@@ -140,6 +145,15 @@ function App() {
   }, [knowledgeItems]);
 
   useEffect(() => {
+    localStorage.setItem(storageKeys.projects, JSON.stringify(projects));
+  }, [projects]);
+
+  useEffect(() => {
+    if (activeProjectId) localStorage.setItem(storageKeys.activeProjectId, activeProjectId);
+    else localStorage.removeItem(storageKeys.activeProjectId);
+  }, [activeProjectId]);
+
+  useEffect(() => {
     localStorage.setItem(storageKeys.stepModelOverrides, JSON.stringify(stepModelOverrides));
   }, [stepModelOverrides]);
 
@@ -200,6 +214,7 @@ function App() {
   const selectedNode = selectedNodeId ? workflowNodes.find(node => node.id === selectedNodeId) : null;
   const selectedEdge = selectedEdgeId ? workflowEdges.find(edge => edge.id === selectedEdgeId) : null;
   const activeProviderStatus = providerStatuses.find(status => status.provider === provider);
+  const activeProject = projects.find(project => project.id === activeProjectId) ?? null;
 
   const appendUniqueById = <T extends { id: string }>(setter: Dispatch<SetStateAction<T[]>>, items: T[]) => {
     setter(prev => {
@@ -214,6 +229,17 @@ function App() {
     onEvidenceClaims: (claims: EvidenceClaim[]) => appendUniqueById(setEvidenceClaims, claims),
     onKnowledgeItems: (items: KnowledgeItem[]) => appendUniqueById(setKnowledgeItems, items),
     stepModelOverrides
+  };
+
+  const getRunSources = () => {
+    const projectSources = activeProject?.sources ?? [];
+    const known = new Set<string>();
+    return [...projectSources, ...sources].filter(source => {
+      const key = source.url || source.id;
+      if (known.has(key)) return false;
+      known.add(key);
+      return true;
+    });
   };
 
   // Update localStorage when setting values change
@@ -300,7 +326,7 @@ function App() {
           handleWorkflowEdgeUpdate,
           handleFinalOutput,
           handleSources,
-          sources,
+          getRunSources(),
           runtimeCallbacks
         );
       } else {
@@ -326,7 +352,7 @@ function App() {
           handleWorkflowEdgeUpdate,
           handleFinalOutput,
           handleSources,
-          sources,
+          getRunSources(),
           runtimeCallbacks
         );
       }
@@ -525,7 +551,7 @@ function App() {
           setWorkspaceView('output');
         },
         (newSources) => setSources(prev => [...prev, ...newSources]),
-        sources,
+        getRunSources(),
         runtimeCallbacks
       );
       confetti({ particleCount: 60, spread: 65, origin: { y: 0.65 } });
@@ -540,15 +566,37 @@ function App() {
     return latest?.text || 'Run this authored workflow.';
   };
 
-  const handleAddManualSource = (source: Omit<SourceRecord, 'id' | 'timestamp' | 'provider'>) => {
+  const enrichManualSource = async (source: SourceRecord): Promise<SourceRecord> => {
+    try {
+      const response = await fetch('/api/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: source.url || undefined, title: source.title, text: source.url ? undefined : source.snippet })
+      });
+      if (!response.ok) return source;
+      const data = await response.json() as { text?: string; summary?: string; chunks?: Array<{ id: string; text: string; index: number }> };
+      return {
+        ...source,
+        fullText: data.text,
+        summary: data.summary,
+        chunks: data.chunks,
+        snippet: data.summary || source.snippet
+      };
+    } catch {
+      return source;
+    }
+  };
+
+  const handleAddManualSource = async (source: Omit<SourceRecord, 'id' | 'timestamp' | 'provider'>) => {
     manualSourceCounter.current += 1;
     const timestamp = new Date().toISOString();
-    const sourceRecord: SourceRecord = {
+    const sourceRecord: SourceRecord = await enrichManualSource({
       ...source,
       id: `manual-${manualSourceCounter.current.toString(36)}`,
       provider: 'manual',
+      category: source.category || 'research',
       timestamp
-    };
+    });
     setSources(prev => [...prev, sourceRecord]);
     appendUniqueById(setKnowledgeItems, [{
       id: `knowledge-${sourceRecord.id}`,
@@ -593,10 +641,125 @@ function App() {
     setRunState(prev => prev ? { ...prev, evaluations: [...prev.evaluations, evaluation], updatedAt: evaluation.timestamp } : prev);
   };
 
+  const mergeProject = (project: ProjectLibrary, run: RunState): ProjectLibrary => {
+    const sourceMap = new Map(project.sources.map(source => [source.url || source.id, source]));
+    const runSources = run.projectLibrary?.sources ?? sources;
+    runSources.forEach(source => sourceMap.set(source.url || source.id, source));
+
+    const acceptedMap = new Map(project.acceptedClaims.map(claim => [claim.id, claim]));
+    const rejectedMap = new Map(project.rejectedClaims.map(claim => [claim.id, claim]));
+    run.factualClaims.filter(claim => claim.status === 'supported').forEach(claim => acceptedMap.set(claim.id, claim));
+
+    const memory: ProjectMemorySnapshot = run.projectMemory ?? {
+      id: `memory-${run.id}`,
+      title: run.objective.slice(0, 72),
+      objective: run.objective,
+      createdAt: run.startedAt,
+      updatedAt: new Date().toISOString(),
+      acceptedClaimIds: run.factualClaims.filter(claim => claim.status === 'supported').map(claim => claim.id),
+      rejectedClaimIds: run.factualClaims.filter(claim => claim.status === 'assumption').map(claim => claim.id),
+      sourceIds: runSources.map(source => source.id),
+      deliverableSectionIds: run.deliverableSections.map(section => section.id)
+    };
+
+    return {
+      ...project,
+      updatedAt: new Date().toISOString(),
+      memories: [memory, ...project.memories.filter(item => item.id !== memory.id)].slice(0, 30),
+      sources: [...sourceMap.values()],
+      acceptedClaims: [...acceptedMap.values()],
+      rejectedClaims: [...rejectedMap.values()],
+      openQuestions: [...new Set([...project.openQuestions, ...run.openQuestions])],
+      deliverableSections: [...run.deliverableSections, ...project.deliverableSections.filter(section => !run.deliverableSections.some(item => item.id === section.id))].slice(0, 80),
+      runIds: [...new Set([run.id, ...project.runIds])]
+    };
+  };
+
+  const handleCreateProject = (name: string) => {
+    const timestamp = new Date().toISOString();
+    const project: ProjectLibrary = {
+      id: `project-${Date.now().toString(36)}`,
+      name,
+      updatedAt: timestamp,
+      memories: [],
+      sources: [],
+      acceptedClaims: [],
+      rejectedClaims: [],
+      openQuestions: [],
+      deliverableSections: [],
+      runIds: []
+    };
+    setProjects(prev => [project, ...prev]);
+    setActiveProjectId(project.id);
+  };
+
+  const handleSaveRunToProject = () => {
+    if (!runState) return;
+    let targetProject = activeProject;
+    if (!targetProject) {
+      const timestamp = new Date().toISOString();
+      targetProject = {
+        id: `project-${Date.now().toString(36)}`,
+        name: runState.objective.slice(0, 72),
+        updatedAt: timestamp,
+        memories: [],
+        sources: [],
+        acceptedClaims: [],
+        rejectedClaims: [],
+        openQuestions: [],
+        deliverableSections: [],
+        runIds: []
+      };
+      setActiveProjectId(targetProject.id);
+    }
+    const merged = mergeProject(targetProject, runState);
+    setProjects(prev => [merged, ...prev.filter(project => project.id !== merged.id)]);
+    confetti({ particleCount: 36, spread: 55, origin: { y: 0.75 } });
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    setProjects(prev => prev.filter(project => project.id !== projectId));
+    if (activeProjectId === projectId) setActiveProjectId(null);
+  };
+
+  const handleSetClaimStatus = (claimId: string, status: ClaimStatus) => {
+    const updateClaim = (claim: FactualClaim): FactualClaim => ({
+      ...claim,
+      status,
+      confidence: status === 'supported' ? claim.confidence : status === 'assumption' ? 'medium' : 'low'
+    });
+    setRunState(prev => prev ? { ...prev, factualClaims: prev.factualClaims.map(claim => claim.id === claimId ? updateClaim(claim) : claim), updatedAt: new Date().toISOString() } : prev);
+    setProjects(prev => prev.map(project => {
+      const existing = [...project.acceptedClaims, ...project.rejectedClaims].find(claim => claim.id === claimId) ?? runState?.factualClaims.find(claim => claim.id === claimId);
+      if (!existing || project.id !== activeProjectId) return project;
+      const updated = updateClaim(existing);
+      return {
+        ...project,
+        updatedAt: new Date().toISOString(),
+        acceptedClaims: status === 'supported' ? [updated, ...project.acceptedClaims.filter(claim => claim.id !== claimId)] : project.acceptedClaims.filter(claim => claim.id !== claimId),
+        rejectedClaims: status === 'assumption' || status === 'unverified' ? [updated, ...project.rejectedClaims.filter(claim => claim.id !== claimId)] : project.rejectedClaims.filter(claim => claim.id !== claimId)
+      };
+    }));
+  };
+
   const handleResearchEvidence = () => {
     if (!runState || isRunning) return;
     const claims = runState.factualClaims.map(claim => `- ${claim.text}`).join('\n') || '- Identify and verify the factual claims in the current objective.';
     handleSendMessage(`Research and verify the evidence behind this objective before making recommendations.\n\nObjective:\n${runState.objective}\n\nClaims to verify:\n${claims}\n\nReturn sourced findings, confidence labels, and corrections to assumptions.`, true);
+  };
+
+  const handleResearchClaim = (claimId: string) => {
+    if (!runState || isRunning) return;
+    const claim = runState.factualClaims.find(item => item.id === claimId);
+    if (!claim) return;
+    handleSendMessage(`Research and verify this specific claim. Return support, contradiction, or insufficient evidence with source citations and confidence.\n\nClaim:\n${claim.text}\n\nProject context:\n${activeProject?.name || runState.objective}`, true);
+  };
+
+  const handleChallengeClaim = (claimId: string) => {
+    if (!runState || isRunning) return;
+    const claim = runState.factualClaims.find(item => item.id === claimId);
+    if (!claim) return;
+    handleSendMessage(`Challenge this claim as a skeptical strategist. Find what would make it false, weak, overstated, or strategically risky. Recommend revised wording and validation steps.\n\nClaim:\n${claim.text}\n\nKnown matches:\n${claim.matches?.map(match => `- ${match.verdict} ${match.score}: ${match.quote}`).join('\n') || 'No matches yet.'}`, true);
   };
 
   const handleChallengeOutput = () => {
@@ -624,6 +787,8 @@ function App() {
       traces,
       evidenceClaims,
       knowledgeItems,
+      projects,
+      activeProjectId,
       stepModelOverrides
     };
     const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
@@ -648,6 +813,8 @@ function App() {
         traces: ExecutionTraceRecord[];
         evidenceClaims: EvidenceClaim[];
         knowledgeItems: KnowledgeItem[];
+        projects: ProjectLibrary[];
+        activeProjectId: string | null;
         stepModelOverrides: Record<string, string>;
       }>;
       if (snapshot.messages) setMessages(snapshot.messages);
@@ -659,6 +826,8 @@ function App() {
       if (snapshot.traces) setTraces(snapshot.traces);
       if (snapshot.evidenceClaims) setEvidenceClaims(snapshot.evidenceClaims);
       if (snapshot.knowledgeItems) setKnowledgeItems(snapshot.knowledgeItems);
+      if (snapshot.projects) setProjects(snapshot.projects);
+      if ('activeProjectId' in snapshot) setActiveProjectId(snapshot.activeProjectId ?? null);
       if (snapshot.stepModelOverrides) setStepModelOverrides(snapshot.stepModelOverrides);
       confetti({ particleCount: 40, spread: 55, origin: { y: 0.75 } });
     } catch (error) {
@@ -717,6 +886,13 @@ function App() {
               >
                 Run
               </button>
+              <button
+                className={`workspace-tab ${workspaceView === 'projects' ? 'is-active' : ''}`}
+                type="button"
+                onClick={() => setWorkspaceView('projects')}
+              >
+                Projects
+              </button>
             </div>
 
           </div>
@@ -743,7 +919,7 @@ function App() {
               <OutputPanel coordinator={coordinator} messages={finalOutputs} />
             ) : workspaceView === 'sources' ? (
               <SourcesPanel sources={sources} onAddSource={handleAddManualSource} onClearSources={() => setSources([])} />
-            ) : (
+            ) : workspaceView === 'intelligence' ? (
               <IntelligencePanel
                 runState={runState}
                 evidenceClaims={evidenceClaims}
@@ -754,6 +930,19 @@ function App() {
                 onResearchEvidence={handleResearchEvidence}
                 onChallengeOutput={handleChallengeOutput}
                 onRefineSection={handleRefineSection}
+                onSetClaimStatus={handleSetClaimStatus}
+                onResearchClaim={handleResearchClaim}
+                onChallengeClaim={handleChallengeClaim}
+              />
+            ) : (
+              <ProjectsPanel
+                projects={projects}
+                activeProjectId={activeProjectId}
+                runState={runState}
+                onCreateProject={handleCreateProject}
+                onSelectProject={setActiveProjectId}
+                onSaveRunToProject={handleSaveRunToProject}
+                onDeleteProject={handleDeleteProject}
               />
             )}
           </div>
