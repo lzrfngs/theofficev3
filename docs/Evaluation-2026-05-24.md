@@ -29,6 +29,8 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Manual sources are ingested through `/api/ingest` before being stored.
 - Nora, a measurement and growth analyst, has been added to own KPIs, experiments, dashboards, success criteria, and learning agendas.
 - Penny now applies mandatory routing gates for audience/culture review, technical feasibility, futures/scenario review, and measurement/growth review.
+- Stephen's writing instructions now require sharper copy discipline: human tension, point of view, multiple territories, line banks, voice rules, taboo phrases, and a visible rewrite pass.
+- The coordinator now adds a Stephen-specific copy mandate whenever the writer is called and protects his strongest language during final synthesis.
 
 ## Bug Check Results
 
@@ -48,6 +50,7 @@ The Office v3 has moved from a legible multi-agent theater into an early workflo
 - Claim controls update local state and project memory, but do not yet create a formal audit trail per claim decision.
 - Mandatory routing gates improve coverage, but they can increase token/cost load on broad briefs.
 - Nora currently reuses the strategist portrait until a dedicated portrait is added.
+- Stephen is now prompted more rigorously, but actual quality should be tested with real creative briefs and compared against prior outputs.
 - Web search can be triggered by policy, but the tool registry is still runtime-internal rather than a full agent-request protocol.
 - Import/export provides portable persistence, but there is still no backend project database or searchable run history.
 - The critique loop is bounded to keep cost and runaway behavior under control; deeper iterative re-planning will need user controls and budget limits.

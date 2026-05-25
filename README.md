@@ -46,6 +46,8 @@ Projects are now a first-class local workspace concept. The Projects tab can cre
 
 The team includes a measurement specialist, Nora, who owns KPIs, experiments, growth loops, dashboards, success criteria, and learning agendas. Penny also applies mandatory routing gates: GTM/creative work brings in John for audience and cultural reception, AI/product/platform work brings in Vadim for feasibility and technical trust, future-facing work brings in Iris for signals and scenarios, and launch/growth/measurement work brings in Nora.
 
+Stephen's writer profile now uses a stricter copy operating system. Creative and campaign work asks him to find the human tension, produce multiple territories, recommend one, build a messaging system, write a line bank, define voice rules, and include a rewrite pass. The coordinator also adds a Stephen-specific mandate whenever he is called so the final work avoids generic strategy prose and preserves sharper language.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

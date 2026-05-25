@@ -355,6 +355,7 @@ function getRoutingGates(userQuery: string): RoutingGate[] {
   const isAiProductOrPlatform = /\b(ai|copilot|agent|agents|llm|automation|software|platform|product|api|data|technical|architecture|prototype|workflow|integration)\b/.test(query);
   const isFutureFacing = /\b(future|futures|forecast|prediction|trend|trends|scenario|signals|horizon|where .* going|next few years|emerging)\b/.test(query);
   const needsMeasurement = /\b(gtm|go-to-market|go to market|launch|growth|experiment|test|testing|kpi|metrics|measurement|success|dashboard|conversion|retention|activation|funnel|30\/60\/90|90 days)\b/.test(query);
+  const needsWriter = /\b(campaign|creative platform|brand platform|messaging|copy|copywriting|tagline|headline|voice|launch|gtm|go-to-market|go to market|manifesto|landing page|social|ad|naming)\b/.test(query);
 
   if (isStrategyOrCreative) {
     gates.push({
@@ -385,6 +386,14 @@ function getRoutingGates(userQuery: string): RoutingGate[] {
       role: 'measurement_analyst',
       reason: 'Launch, GTM, growth, and strategy work needs measurable success criteria, experiments, and a learning agenda.',
       prompt: 'Define the measurement system. Provide KPIs, leading indicators, experiments, decision thresholds, dashboard needs, and a 30/60/90 day learning agenda.'
+    });
+  }
+
+  if (needsWriter) {
+    gates.push({
+      role: 'writer',
+      reason: 'Campaign, GTM, creative platform, messaging, naming, or launch work needs sharp audience-facing language rather than generic strategy prose.',
+      prompt: 'Create the verbal platform. Find the human tension, write distinct creative territories, choose the strongest territory, build the messaging system, line bank, voice rules, and rewrite pass.'
     });
   }
 
@@ -523,11 +532,16 @@ const REQUIRED_DELIVERABLE_SECTIONS = [
 ];
 
 function formatDeliverableSchemaForPrompt() {
-  return `\n\nRequired deliverable schema:\n${REQUIRED_DELIVERABLE_SECTIONS.map(section => `## ${section}`).join('\n')}\n\nEvery section must be present. In Evidence Table, include source title or URL, claim supported, confidence, and relevance. In Assumptions Table, include assumption, why it matters, and validation action.`;
+  return `\n\nRequired deliverable schema:\n${REQUIRED_DELIVERABLE_SECTIONS.map(section => `## ${section}`).join('\n')}\n\nEvery section must be present. In Creative Platform and Messaging Architecture, preserve Stephen's sharpest language, include multiple creative territories when available, and avoid flattening lines into generic strategy prose. In Evidence Table, include source title or URL, claim supported, confidence, and relevance. In Assumptions Table, include assumption, why it matters, and validation action.`;
 }
 
 function buildDelegationPrompt(userQuery: string, delegation: NormalizedDelegation, dependencyContext: string, sources: SourceRecord[]) {
-  return `${delegation.prompt}\n\nUser request:\n${userQuery}${dependencyContext}${formatSourcesForPrompt(sources)}`;
+  return `${delegation.prompt}${formatAgentSpecificBrief(delegation.agent)}\n\nUser request:\n${userQuery}${dependencyContext}${formatSourcesForPrompt(sources)}`;
+}
+
+function formatAgentSpecificBrief(agentRole: string) {
+  if (agentRole !== 'writer') return '';
+  return `\n\nStephen-specific copy mandate:\n- Do not summarize the strategy as copy. Turn it into language with tension, point of view, and memorability.\n- Produce three distinct creative territories before choosing one.\n- Include a line bank with at least 12 usable lines across headlines, taglines, CTAs, social hooks, and product/lifecycle copy.\n- Include voice rules and taboo phrases.\n- Include one weak generic line rewritten into a sharper line with rationale.\n- Avoid mush words like empower, unlock, seamless, innovative, reimagine, transform, next-generation, supercharge, elevate, robust, solution, leverage, at scale, future of, and generic AI-powered claims.\n- Make every major line specific to this brand, audience, product, evidence, or cultural tension.`;
 }
 
 function extractFactualClaims(userQuery: string): FactualClaim[] {

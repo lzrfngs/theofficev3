@@ -37,9 +37,9 @@ export const AGENT_CATALOG: Agent[] = [
     activeClass: 'active-writer',
     mdFile: 'docs/agents/writer.md',
     systemPrompt: writerPrompt,
-    specialtyKeywords: ['write', 'copy', 'campaign', 'pitch', 'slogan', 'tagline', 'brand', 'voice', 'naming', 'headline', 'ad', 'hook', 'creative', 'script', 'manifesto'],
+    specialtyKeywords: ['write', 'copy', 'campaign', 'pitch', 'slogan', 'tagline', 'brand', 'voice', 'naming', 'headline', 'headlines', 'ad', 'hook', 'hooks', 'creative', 'script', 'manifesto', 'messaging', 'platform line', 'tagline', 'copywriting', 'landing page', 'cta', 'launch copy', 'voice system', 'territory', 'territories'],
     mockAction: 'write a creative hook',
-    mockFocus: 'Shape the idea into brand voice, a stronger hook, and campaignable copy options.',
+    mockFocus: 'Find the human tension, create sharp campaign territories, write line banks, and cut generic language until the copy has teeth.',
     mockResponse: `### Creative Advertising & Hook
 Here are potential angles using the **AIDA** framework:
 
