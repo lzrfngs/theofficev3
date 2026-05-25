@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
-import { Settings, Trash2, Sun, Moon } from 'lucide-react';
+import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
+import { Download, Settings, Trash2, Sun, Moon, Upload } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Agent, ChatMessage, ModelProvider } from './services/coordinator';
-import type { SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
+import type { EvidenceClaim, ExecutionTraceRecord, KnowledgeItem, RunEvaluation, RunState, SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from './types/workflow';
 import {
   INITIAL_AGENTS,
   loadAgentSystemPrompts,
@@ -13,10 +13,11 @@ import { AgentPanel } from './components/AgentPanel';
 import { WorkflowCanvas } from './components/WorkflowCanvas';
 import { OutputPanel } from './components/OutputPanel';
 import { SourcesPanel } from './components/SourcesPanel';
+import { IntelligencePanel } from './components/IntelligencePanel';
 import { SettingsModal } from './components/SettingsModal';
 import { EditProfileModal } from './components/EditProfileModal';
 
-type WorkspaceView = 'canvas' | 'output' | 'sources';
+type WorkspaceView = 'canvas' | 'output' | 'sources' | 'intelligence';
 
 const storageKeys = {
   messages: 'the_office_messages_v1',
@@ -24,6 +25,11 @@ const storageKeys = {
   workflowEdges: 'the_office_workflow_edges_v1',
   finalOutputs: 'the_office_final_outputs_v1',
   sources: 'the_office_sources_v1',
+  runState: 'the_office_run_state_v1',
+  traces: 'the_office_traces_v1',
+  evidenceClaims: 'the_office_evidence_claims_v1',
+  knowledgeItems: 'the_office_knowledge_items_v1',
+  stepModelOverrides: 'the_office_step_model_overrides_v1',
   workspaceView: 'the_office_workspace_view_v1'
 };
 
@@ -60,6 +66,11 @@ function App() {
   const [workflowEdges, setWorkflowEdges] = useState<WorkflowCanvasEdge[]>(() => loadStoredJson(storageKeys.workflowEdges, []));
   const [finalOutputs, setFinalOutputs] = useState<ChatMessage[]>(() => loadStoredJson(storageKeys.finalOutputs, []));
   const [sources, setSources] = useState<SourceRecord[]>(() => loadStoredJson(storageKeys.sources, []));
+  const [runState, setRunState] = useState<RunState | null>(() => loadStoredJson<RunState | null>(storageKeys.runState, null));
+  const [traces, setTraces] = useState<ExecutionTraceRecord[]>(() => loadStoredJson(storageKeys.traces, []));
+  const [evidenceClaims, setEvidenceClaims] = useState<EvidenceClaim[]>(() => loadStoredJson(storageKeys.evidenceClaims, []));
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>(() => loadStoredJson(storageKeys.knowledgeItems, []));
+  const [stepModelOverrides, setStepModelOverrides] = useState<Record<string, string>>(() => loadStoredJson(storageKeys.stepModelOverrides, {}));
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(() => (localStorage.getItem(storageKeys.workspaceView) as WorkspaceView | null) || 'canvas');
   const [profileAgentId, setProfileAgentId] = useState<string | null>(null);
@@ -67,6 +78,7 @@ function App() {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const manualNodeCounter = useRef(0);
   const manualSourceCounter = useRef(0);
+  const importFileRef = useRef<HTMLInputElement | null>(null);
   
   // Settings State (loaded from localStorage)
   const [provider, setProvider] = useState<ModelProvider>(() => (localStorage.getItem('model_provider') as ModelProvider | null) || 'gemini');
@@ -111,6 +123,26 @@ function App() {
   }, [sources]);
 
   useEffect(() => {
+    localStorage.setItem(storageKeys.runState, JSON.stringify(runState));
+  }, [runState]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.traces, JSON.stringify(traces));
+  }, [traces]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.evidenceClaims, JSON.stringify(evidenceClaims));
+  }, [evidenceClaims]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.knowledgeItems, JSON.stringify(knowledgeItems));
+  }, [knowledgeItems]);
+
+  useEffect(() => {
+    localStorage.setItem(storageKeys.stepModelOverrides, JSON.stringify(stepModelOverrides));
+  }, [stepModelOverrides]);
+
+  useEffect(() => {
     localStorage.setItem(storageKeys.workspaceView, workspaceView);
   }, [workspaceView]);
 
@@ -142,10 +174,26 @@ function App() {
   const selectedNode = selectedNodeId ? workflowNodes.find(node => node.id === selectedNodeId) : null;
   const selectedEdge = selectedEdgeId ? workflowEdges.find(edge => edge.id === selectedEdgeId) : null;
 
+  const appendUniqueById = <T extends { id: string }>(setter: Dispatch<SetStateAction<T[]>>, items: T[]) => {
+    setter(prev => {
+      const known = new Set(prev.map(item => item.id));
+      return [...prev, ...items.filter(item => !known.has(item.id))];
+    });
+  };
+
+  const runtimeCallbacks = {
+    onRunState: (state: RunState) => setRunState(state),
+    onTrace: (trace: ExecutionTraceRecord) => appendUniqueById(setTraces, [trace]),
+    onEvidenceClaims: (claims: EvidenceClaim[]) => appendUniqueById(setEvidenceClaims, claims),
+    onKnowledgeItems: (items: KnowledgeItem[]) => appendUniqueById(setKnowledgeItems, items),
+    stepModelOverrides
+  };
+
   // Update localStorage when setting values change
-  const handleSaveSettings = (newProvider: ModelProvider, newModel: string) => {
+  const handleSaveSettings = (newProvider: ModelProvider, newModel: string, newStepModelOverrides: Record<string, string>) => {
     setProvider(newProvider);
     setModel(newModel);
+    setStepModelOverrides(newStepModelOverrides);
     localStorage.setItem('model_provider', newProvider);
     localStorage.setItem('model_name', newModel);
     confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
@@ -225,7 +273,8 @@ function App() {
           handleWorkflowEdgeUpdate,
           handleFinalOutput,
           handleSources,
-          sources
+          sources,
+          runtimeCallbacks
         );
       } else {
         setWorkflowNodes([]);
@@ -250,7 +299,8 @@ function App() {
           handleWorkflowEdgeUpdate,
           handleFinalOutput,
           handleSources,
-          sources
+          sources,
+          runtimeCallbacks
         );
       }
 
@@ -273,6 +323,10 @@ function App() {
     setWorkflowEdges([]);
     setFinalOutputs([]);
     setSources([]);
+    setRunState(null);
+    setTraces([]);
+    setEvidenceClaims([]);
+    setKnowledgeItems([]);
     setActiveAgent(null);
     setProfileAgentId(null);
     setSelectedNodeId(null);
@@ -384,6 +438,23 @@ function App() {
     setSelectedEdgeId(null);
   };
 
+  const handleResetSelectedNode = () => {
+    if (!selectedNodeId || selectedNodeId === 'request' || selectedNodeId === 'manager') return;
+    setWorkflowNodes(prev => prev.map(node => node.id === selectedNodeId ? { ...node, status: 'queued', output: undefined } : node));
+    setWorkflowEdges(prev => prev.map(edge => edge.source === selectedNodeId || edge.target === selectedNodeId ? { ...edge, active: false } : edge));
+  };
+
+  const handleUseSelectedOutputAsSource = () => {
+    if (!selectedNode?.output) return;
+    handleAddManualSource({
+      title: `${selectedNode.label} output`,
+      snippet: selectedNode.output,
+      query: 'workflow output',
+      usedBy: 'Workflow'
+    });
+    setWorkspaceView('sources');
+  };
+
   const handleDeleteSelectedEdge = () => {
     if (!selectedEdgeId || selectedEdgeId === 'request-manager') return;
     setWorkflowEdges(prev => prev.filter(edge => edge.id !== selectedEdgeId));
@@ -427,7 +498,8 @@ function App() {
           setWorkspaceView('output');
         },
         (newSources) => setSources(prev => [...prev, ...newSources]),
-        sources
+        sources,
+        runtimeCallbacks
       );
       confetti({ particleCount: 60, spread: 65, origin: { y: 0.65 } });
     } finally {
@@ -443,12 +515,111 @@ function App() {
 
   const handleAddManualSource = (source: Omit<SourceRecord, 'id' | 'timestamp' | 'provider'>) => {
     manualSourceCounter.current += 1;
-    setSources(prev => [...prev, {
+    const timestamp = new Date().toISOString();
+    const sourceRecord: SourceRecord = {
       ...source,
       id: `manual-${manualSourceCounter.current.toString(36)}`,
       provider: 'manual',
-      timestamp: new Date().toISOString()
+      timestamp
+    };
+    setSources(prev => [...prev, sourceRecord]);
+    appendUniqueById(setKnowledgeItems, [{
+      id: `knowledge-${sourceRecord.id}`,
+      title: sourceRecord.title,
+      body: sourceRecord.snippet,
+      kind: 'manual',
+      sourceId: sourceRecord.id,
+      tags: ['manual', sourceRecord.usedBy || 'User'],
+      createdAt: timestamp,
+      updatedAt: timestamp
     }]);
+    appendUniqueById(setEvidenceClaims, [{
+      id: `claim-${sourceRecord.id}`,
+      claim: sourceRecord.snippet || sourceRecord.title,
+      sourceIds: [sourceRecord.id],
+      confidence: 'medium',
+      usedBy: 'User',
+      timestamp
+    }]);
+  };
+
+  const handleClearRuntimeState = () => {
+    if (isRunning) return;
+    setRunState(null);
+    setTraces([]);
+    setEvidenceClaims([]);
+    setKnowledgeItems([]);
+  };
+
+  const handleRateRun = (rating: number) => {
+    if (!runState) return;
+    const evaluation: RunEvaluation = {
+      id: `user-eval-${Date.now().toString(36)}`,
+      reviewer: 'user',
+      rating,
+      summary: `User rated this run ${rating}/5.`,
+      strengths: [],
+      gaps: [],
+      nextActions: [],
+      timestamp: new Date().toISOString()
+    };
+    setRunState(prev => prev ? { ...prev, evaluations: [...prev.evaluations, evaluation], updatedAt: evaluation.timestamp } : prev);
+  };
+
+  const handleExportWorkspace = () => {
+    const snapshot = {
+      exportedAt: new Date().toISOString(),
+      messages,
+      workflowNodes,
+      workflowEdges,
+      finalOutputs,
+      sources,
+      runState,
+      traces,
+      evidenceClaims,
+      knowledgeItems,
+      stepModelOverrides
+    };
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `the-office-workspace-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportWorkspace = async (file: File | null) => {
+    if (!file || isRunning) return;
+    try {
+      const snapshot = JSON.parse(await file.text()) as Partial<{
+        messages: Record<string, ChatMessage[]>;
+        workflowNodes: WorkflowCanvasNode[];
+        workflowEdges: WorkflowCanvasEdge[];
+        finalOutputs: ChatMessage[];
+        sources: SourceRecord[];
+        runState: RunState | null;
+        traces: ExecutionTraceRecord[];
+        evidenceClaims: EvidenceClaim[];
+        knowledgeItems: KnowledgeItem[];
+        stepModelOverrides: Record<string, string>;
+      }>;
+      if (snapshot.messages) setMessages(snapshot.messages);
+      if (snapshot.workflowNodes) setWorkflowNodes(snapshot.workflowNodes);
+      if (snapshot.workflowEdges) setWorkflowEdges(snapshot.workflowEdges);
+      if (snapshot.finalOutputs) setFinalOutputs(snapshot.finalOutputs);
+      if (snapshot.sources) setSources(snapshot.sources);
+      if ('runState' in snapshot) setRunState(snapshot.runState ?? null);
+      if (snapshot.traces) setTraces(snapshot.traces);
+      if (snapshot.evidenceClaims) setEvidenceClaims(snapshot.evidenceClaims);
+      if (snapshot.knowledgeItems) setKnowledgeItems(snapshot.knowledgeItems);
+      if (snapshot.stepModelOverrides) setStepModelOverrides(snapshot.stepModelOverrides);
+      confetti({ particleCount: 40, spread: 55, origin: { y: 0.75 } });
+    } catch (error) {
+      console.error('Failed to import workspace snapshot', error);
+    } finally {
+      if (importFileRef.current) importFileRef.current.value = '';
+    }
   };
 
   return (
@@ -471,12 +642,10 @@ function App() {
 
         <section className="workspace-panel" aria-label="Workflow and output workspace">
           <div className="workspace-header">
-            <div className="workspace-tabs" role="tablist" aria-label="Workspace views">
+            <div className="workspace-tabs" aria-label="Workspace views">
               <button
                 className={`workspace-tab ${workspaceView === 'canvas' ? 'is-active' : ''}`}
                 type="button"
-                role="tab"
-                aria-selected={workspaceView === 'canvas'}
                 onClick={() => setWorkspaceView('canvas')}
               >
                 Canvas
@@ -484,8 +653,6 @@ function App() {
               <button
                 className={`workspace-tab ${workspaceView === 'output' ? 'is-active' : ''}`}
                 type="button"
-                role="tab"
-                aria-selected={workspaceView === 'output'}
                 onClick={() => setWorkspaceView('output')}
               >
                 Output
@@ -493,11 +660,16 @@ function App() {
               <button
                 className={`workspace-tab ${workspaceView === 'sources' ? 'is-active' : ''}`}
                 type="button"
-                role="tab"
-                aria-selected={workspaceView === 'sources'}
                 onClick={() => setWorkspaceView('sources')}
               >
                 Sources
+              </button>
+              <button
+                className={`workspace-tab ${workspaceView === 'intelligence' ? 'is-active' : ''}`}
+                type="button"
+                onClick={() => setWorkspaceView('intelligence')}
+              >
+                Run
               </button>
             </div>
 
@@ -523,8 +695,17 @@ function App() {
               />
             ) : workspaceView === 'output' ? (
               <OutputPanel coordinator={coordinator} messages={finalOutputs} />
-            ) : (
+            ) : workspaceView === 'sources' ? (
               <SourcesPanel sources={sources} onAddSource={handleAddManualSource} onClearSources={() => setSources([])} />
+            ) : (
+              <IntelligencePanel
+                runState={runState}
+                evidenceClaims={evidenceClaims}
+                knowledgeItems={knowledgeItems}
+                traces={traces}
+                onClear={handleClearRuntimeState}
+                onRateRun={handleRateRun}
+              />
             )}
           </div>
         </section>
@@ -532,7 +713,7 @@ function App() {
 
       {/* Footer bar styled using Vellum navbar concept */}
       <footer className="footer-bar">
-        <div className="badge badge--dot bg-slate-900/40" style={{ height: '28px', padding: '0 12px', borderRadius: 'var(--r-md)' }}>
+        <div className="workspace-model-badge badge badge--dot bg-slate-900/40">
           <span className="flex items-center gap-1 text-slate-300 font-medium">
             {provider} / {model}
           </span>
@@ -562,11 +743,24 @@ function App() {
           ))}
         </div>
 
-        <div className="row" style={{ gap: '8px' }}>
+        <div className="footer-actions row">
+          <input
+            ref={importFileRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            title="Import workspace snapshot"
+            onChange={(event) => handleImportWorkspace(event.target.files?.[0] ?? null)}
+          />
+          <button className="btn btn--secondary btn--sm" onClick={() => importFileRef.current?.click()} disabled={isRunning} title="Import workspace snapshot">
+            <Upload size={13} /> Import
+          </button>
+          <button className="btn btn--secondary btn--sm" onClick={handleExportWorkspace} title="Export workspace snapshot">
+            <Download size={13} /> Export
+          </button>
           {/* Theme Toggle */}
           <button 
-            className="btn btn--secondary btn--icon"
-            style={{ width: '36px', height: '36px' }}
+            className="btn btn--secondary btn--icon theme-toggle-button"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
           >
@@ -588,6 +782,8 @@ function App() {
         onClose={() => setIsSettingsOpen(false)}
         provider={provider}
         model={model}
+        agents={agents}
+        stepModelOverrides={stepModelOverrides}
         onSave={handleSaveSettings}
       />
 
@@ -629,7 +825,9 @@ function App() {
             onChange={(event) => handleSelectedNodePromptChange(event.target.value)}
           />
           <div className="node-editor__actions">
-            <button type="button" className="btn btn--secondary btn--sm" onClick={handleDuplicateSelectedNode}>Duplicate</button>
+            <button type="button" className="btn btn--secondary btn--sm" onClick={handleDuplicateSelectedNode}>Branch</button>
+            <button type="button" className="btn btn--secondary btn--sm" onClick={handleResetSelectedNode}>Reset</button>
+            <button type="button" className="btn btn--secondary btn--sm" onClick={handleUseSelectedOutputAsSource} disabled={!selectedNode.output}>Save source</button>
             <button type="button" className="btn btn--secondary btn--sm" onClick={() => setSelectedNodeId(null)}>Done</button>
             <button type="button" className="btn btn--danger btn--sm" onClick={handleDeleteSelectedNode}>Delete node</button>
           </div>

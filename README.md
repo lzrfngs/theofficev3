@@ -28,6 +28,12 @@ There is also an image-generation foundation at `/api/generate-image`, configure
 
 The Sources tab stores manual sources and web results. Mira can search the web during researcher steps when `TAVILY_API_KEY` is configured in Vercel. Search results are saved with title, URL, snippet, query, provider, and the agent that used them.
 
+## Runtime Intelligence
+
+The Run tab exposes the active workflow's structured state: objective, confidence, assumptions, open questions, decisions, risks, conflicts, tool calls, evidence claims, knowledge items, traces, and evaluations. Automatic workflows execute dependency-aware plans, preserve repeated-agent outputs by step id, and run a bounded Penny critique pass that can request one targeted repair step before final synthesis.
+
+Manual sources and agent outputs can be promoted into the shared knowledge pool. Workspace snapshots can be exported/imported as JSON for portable persistence beyond browser localStorage. Settings also support per-agent model overrides so routing, specialist work, and synthesis can use different model choices while keeping the same provider router.
+
 ## Agent Profiles
 
 Persistent agent markdown files live in `docs/agents`. The app imports those files through `src/data/agents.ts`, which acts as the agent catalog.

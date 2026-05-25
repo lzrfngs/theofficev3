@@ -1,5 +1,16 @@
 import { AGENT_CATALOG } from '../data/agents';
-import type { SourceRecord, WorkflowCanvasEdge, WorkflowCanvasNode, WorkflowNodeUpdate } from '../types/workflow';
+import type {
+  EvidenceClaim,
+  ExecutionTraceRecord,
+  KnowledgeItem,
+  RunEvaluation,
+  RunState,
+  SourceRecord,
+  ToolCallRecord,
+  WorkflowCanvasEdge,
+  WorkflowCanvasNode,
+  WorkflowNodeUpdate
+} from '../types/workflow';
 
 export interface Agent {
   id: string;
@@ -42,6 +53,27 @@ interface PlanningResult {
   response: string;
 }
 
+interface CritiqueResult {
+  sufficient: boolean;
+  confidence: RunState['confidence'];
+  summary: string;
+  assumptions?: string[];
+  openQuestions?: string[];
+  decisions?: string[];
+  risks?: string[];
+  conflicts?: string[];
+  additionalDelegations?: DelegationPlanItem[];
+  nextActions?: string[];
+}
+
+interface ExecutionRuntimeOptions {
+  onRunState?: (state: RunState) => void;
+  onTrace?: (trace: ExecutionTraceRecord) => void;
+  onEvidenceClaims?: (claims: EvidenceClaim[]) => void;
+  onKnowledgeItems?: (items: KnowledgeItem[]) => void;
+  stepModelOverrides?: Record<string, string>;
+}
+
 type NormalizedDelegation = Required<DelegationPlanItem>;
 
 interface StepExecutionResult {
@@ -57,6 +89,24 @@ interface RoutingHint {
   score: number;
   matchedKeywords: string[];
 }
+
+const RUNTIME_TOOLS = {
+  webSearch: {
+    id: 'web_search',
+    name: 'Web search',
+    description: 'Searches the public web and returns source records.'
+  },
+  knowledgeLookup: {
+    id: 'knowledge_lookup',
+    name: 'Knowledge lookup',
+    description: 'Injects saved sources and knowledge into the step prompt.'
+  },
+  imageGeneration: {
+    id: 'image_generation',
+    name: 'Image generation',
+    description: 'Available visual generation capability for creative workflows.'
+  }
+} as const;
 
 export const INITIAL_AGENTS: Agent[] = AGENT_CATALOG;
 
@@ -259,6 +309,160 @@ function buildDelegationPrompt(userQuery: string, delegation: NormalizedDelegati
   return `${delegation.prompt}\n\nUser request:\n${userQuery}${dependencyContext}${formatSourcesForPrompt(sources)}`;
 }
 
+function createRunState(objective: string, mode: RunState['mode'], provider: ModelProvider, model: string): RunState {
+  const timestamp = new Date().toISOString();
+  return {
+    id: `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    objective,
+    mode,
+    status: 'planning',
+    provider,
+    model,
+    startedAt: timestamp,
+    updatedAt: timestamp,
+    confidence: 'medium',
+    assumptions: [],
+    openQuestions: [],
+    decisions: [],
+    risks: [],
+    conflicts: [],
+    evidenceClaimIds: [],
+    knowledgeItemIds: [],
+    toolCalls: [],
+    traces: [],
+    evaluations: []
+  };
+}
+
+function emitRunState(runState: RunState, options: ExecutionRuntimeOptions) {
+  options.onRunState?.({
+    ...runState,
+    toolCalls: [...runState.toolCalls],
+    traces: [...runState.traces],
+    evaluations: [...runState.evaluations]
+  });
+}
+
+function updateRunState(runState: RunState, options: ExecutionRuntimeOptions, update: Partial<RunState>) {
+  Object.assign(runState, update, { updatedAt: new Date().toISOString() });
+  emitRunState(runState, options);
+}
+
+function addTrace(runState: RunState, options: ExecutionRuntimeOptions, trace: Omit<ExecutionTraceRecord, 'id' | 'runId' | 'timestamp'>) {
+  const record: ExecutionTraceRecord = {
+    ...trace,
+    id: `trace-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    runId: runState.id,
+    timestamp: new Date().toISOString()
+  };
+  runState.traces = [...runState.traces, record];
+  runState.updatedAt = record.timestamp;
+  options.onTrace?.(record);
+  emitRunState(runState, options);
+}
+
+function addToolCall(runState: RunState, options: ExecutionRuntimeOptions, call: Omit<ToolCallRecord, 'id' | 'timestamp'>) {
+  const record: ToolCallRecord = {
+    ...call,
+    id: `tool-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    timestamp: new Date().toISOString()
+  };
+  runState.toolCalls = [...runState.toolCalls, record];
+  emitRunState(runState, options);
+  return record;
+}
+
+function updateToolCall(runState: RunState, options: ExecutionRuntimeOptions, toolCallId: string, update: Partial<ToolCallRecord>) {
+  runState.toolCalls = runState.toolCalls.map(call => call.id === toolCallId ? { ...call, ...update } : call);
+  emitRunState(runState, options);
+}
+
+function sourcesToKnowledgeItems(sources: SourceRecord[]): KnowledgeItem[] {
+  const timestamp = new Date().toISOString();
+  return sources.map(source => ({
+    id: `knowledge-${source.id}`,
+    title: source.title,
+    body: source.snippet,
+    kind: 'source',
+    sourceId: source.id,
+    tags: [source.provider, source.usedBy || 'source'].filter(Boolean),
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }));
+}
+
+function outputToKnowledgeItem(step: StepExecutionResult): KnowledgeItem {
+  const timestamp = new Date().toISOString();
+  return {
+    id: `knowledge-output-${step.id}`,
+    title: `${step.label} output`,
+    body: step.output,
+    kind: 'agent-output',
+    tags: [step.agentRole, step.agentName],
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+function createEvidenceClaims(sources: SourceRecord[], usedBy: string): EvidenceClaim[] {
+  const timestamp = new Date().toISOString();
+  return sources.map(source => ({
+    id: `claim-${source.id}`,
+    claim: source.snippet || source.title,
+    sourceIds: [source.id],
+    confidence: source.provider === 'manual' ? 'medium' : 'low',
+    usedBy,
+    timestamp
+  }));
+}
+
+function mergeUnique<T>(current: T[], additions: T[]) {
+  return [...current, ...additions.filter(item => !current.includes(item))];
+}
+
+function selectModelForStep(baseModel: string, agent: Agent, stepId: string, options: ExecutionRuntimeOptions) {
+  return options.stepModelOverrides?.[stepId] || options.stepModelOverrides?.[agent.id] || options.stepModelOverrides?.[agent.role] || baseModel;
+}
+
+function extractCritique(rawText: string): CritiqueResult | null {
+  const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  const candidate = firstBrace !== -1 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : cleaned;
+
+  try {
+    const parsed = JSON.parse(candidate) as Partial<CritiqueResult>;
+    if (typeof parsed.sufficient !== 'boolean' || typeof parsed.summary !== 'string') return null;
+    return {
+      sufficient: parsed.sufficient,
+      confidence: parsed.confidence === 'low' || parsed.confidence === 'high' ? parsed.confidence : 'medium',
+      summary: parsed.summary,
+      assumptions: Array.isArray(parsed.assumptions) ? parsed.assumptions.filter(item => typeof item === 'string') : [],
+      openQuestions: Array.isArray(parsed.openQuestions) ? parsed.openQuestions.filter(item => typeof item === 'string') : [],
+      decisions: Array.isArray(parsed.decisions) ? parsed.decisions.filter(item => typeof item === 'string') : [],
+      risks: Array.isArray(parsed.risks) ? parsed.risks.filter(item => typeof item === 'string') : [],
+      conflicts: Array.isArray(parsed.conflicts) ? parsed.conflicts.filter(item => typeof item === 'string') : [],
+      additionalDelegations: Array.isArray(parsed.additionalDelegations) ? parsed.additionalDelegations.filter(isDelegationPlanItem).slice(0, 2) : [],
+      nextActions: Array.isArray(parsed.nextActions) ? parsed.nextActions.filter(item => typeof item === 'string') : []
+    };
+  } catch {
+    return null;
+  }
+}
+
+function critiqueToEvaluation(critique: CritiqueResult): RunEvaluation {
+  return {
+    id: `eval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    reviewer: 'penny',
+    rating: critique.confidence === 'high' ? 4 : critique.confidence === 'medium' ? 3 : 2,
+    summary: critique.summary,
+    strengths: critique.decisions ?? [],
+    gaps: [...(critique.openQuestions ?? []), ...(critique.conflicts ?? [])],
+    nextActions: critique.nextActions ?? [],
+    timestamp: new Date().toISOString()
+  };
+}
+
 // Coordinate the multi-agent execution pipeline
 export async function runMultiAgentPipeline(
   userQuery: string,
@@ -272,7 +476,8 @@ export async function runMultiAgentPipeline(
   onWorkflowEdgeUpdate?: (edgeId: string, update: Partial<WorkflowCanvasEdge>) => void,
   onFinalOutput?: (message: ChatMessage) => void,
   onSources?: (sources: SourceRecord[]) => void,
-  existingSources: SourceRecord[] = []
+  existingSources: SourceRecord[] = [],
+  runtimeOptions: ExecutionRuntimeOptions = {}
 ): Promise<void> {
   
   // 1. Warm-up and load prompts if they aren't loaded yet
@@ -285,6 +490,8 @@ export async function runMultiAgentPipeline(
   // Helper to generate timestamps
   const getTimestamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const uuid = () => Math.random().toString(36).substring(2, 9);
+  const runState = createRunState(userQuery, 'automatic', provider, model);
+  emitRunState(runState, runtimeOptions);
 
   try {
     // --- Step 1: Penny analyzes the request and delegates tasks ---
@@ -335,8 +542,14 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
     const normalizedDelegations = normalizeDelegations(plan.delegations, activeAgents);
     const executableDelegations = normalizedDelegations.length > 0 ? normalizedDelegations : normalizeDelegations(fallbackPlan.delegations, activeAgents);
     const executionOrder = sortDelegationsByDependencies(executableDelegations);
+    const synthesisOrder = [...executionOrder];
     const workflow = createWorkflowPlan(userQuery, secretary, activeAgents, executableDelegations);
     onWorkflowPlan?.(workflow.nodes, workflow.edges);
+    addTrace(runState, runtimeOptions, {
+      type: 'plan',
+      title: 'Workflow planned',
+      detail: executionOrder.map(delegation => `${delegation.id}: ${delegation.agent}`).join('\n')
+    });
 
     // Post Penny's planning message
     onStep(secretary.id, {
@@ -349,13 +562,28 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
 
     const stepResults: Record<string, StepExecutionResult> = {};
     let allSources = [...existingSources];
+    const initialKnowledge = sourcesToKnowledgeItems(existingSources);
+    if (initialKnowledge.length > 0) {
+      runtimeOptions.onKnowledgeItems?.(initialKnowledge);
+      updateRunState(runState, runtimeOptions, { knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, initialKnowledge.map(item => item.id)) });
+    }
+    updateRunState(runState, runtimeOptions, { status: 'executing' });
 
     // --- Step 2: Execute delegations in sequence/parallel ---
     for (const delegation of executionOrder) {
       const targetAgent = activeAgents.find(a => a.role === delegation.agent || a.id === delegation.agent);
       if (!targetAgent) continue;
+      const stepModel = selectModelForStep(model, targetAgent, delegation.id, runtimeOptions);
 
       onWorkflowNodeUpdate?.(delegation.id, { status: 'thinking' });
+      updateRunState(runState, runtimeOptions, { activeStepId: delegation.id });
+      addTrace(runState, runtimeOptions, {
+        type: 'step-start',
+        title: `${targetAgent.name} started ${delegation.label}`,
+        detail: delegation.prompt,
+        agentId: targetAgent.id,
+        nodeId: delegation.id
+      });
       workflow.edges
         .filter(edge => edge.target === delegation.id)
         .forEach(edge => onWorkflowEdgeUpdate?.(edge.id, { active: true }));
@@ -367,16 +595,43 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       try {
         let runSources = allSources;
         if (targetAgent.role === 'researcher') {
+          const toolCall = addToolCall(runState, runtimeOptions, {
+            toolId: RUNTIME_TOOLS.webSearch.id,
+            toolName: RUNTIME_TOOLS.webSearch.name,
+            requestedBy: targetAgent.name,
+            input: `${userQuery}\n${delegation.prompt}`,
+            status: 'running'
+          });
           const foundSources = await searchWeb(`${userQuery}\n${delegation.prompt}`, targetAgent.name);
           if (foundSources.length > 0) {
             onSources?.(foundSources);
             allSources = [...allSources, ...foundSources];
             runSources = allSources;
+            const knowledgeItems = sourcesToKnowledgeItems(foundSources);
+            const evidenceClaims = createEvidenceClaims(foundSources, targetAgent.name);
+            runtimeOptions.onKnowledgeItems?.(knowledgeItems);
+            runtimeOptions.onEvidenceClaims?.(evidenceClaims);
+            updateRunState(runState, runtimeOptions, {
+              knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, knowledgeItems.map(item => item.id)),
+              evidenceClaimIds: mergeUnique(runState.evidenceClaimIds, evidenceClaims.map(claim => claim.id))
+            });
           }
+          updateToolCall(runState, runtimeOptions, toolCall.id, {
+            status: foundSources.length > 0 ? 'complete' : 'error',
+            outputSummary: foundSources.length > 0 ? `${foundSources.length} sources found` : 'No sources returned',
+            sourceIds: foundSources.map(source => source.id)
+          });
+          addTrace(runState, runtimeOptions, {
+            type: 'tool-call',
+            title: RUNTIME_TOOLS.webSearch.name,
+            detail: foundSources.length > 0 ? `${foundSources.length} sources attached` : 'Search returned no sources',
+            agentId: targetAgent.id,
+            nodeId: delegation.id
+          });
         }
         const dependencyContext = formatDependencyContext(delegation, stepResults);
         const prompt = buildDelegationPrompt(userQuery, delegation, dependencyContext, runSources);
-        const subResult = await callModel(provider, model, targetAgent.systemPrompt || '', prompt);
+        const subResult = await callModel(provider, stepModel, targetAgent.systemPrompt || '', prompt);
         stepResults[delegation.id] = {
           id: delegation.id,
           label: delegation.label,
@@ -391,6 +646,18 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
           role: 'agent',
           text: subResult,
           timestamp: getTimestamp()
+        });
+        const outputKnowledge = outputToKnowledgeItem(stepResults[delegation.id]);
+        runtimeOptions.onKnowledgeItems?.([outputKnowledge]);
+        updateRunState(runState, runtimeOptions, {
+          knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, [outputKnowledge.id])
+        });
+        addTrace(runState, runtimeOptions, {
+          type: 'step-complete',
+          title: `${targetAgent.name} completed ${delegation.label}`,
+          detail: summarizeForNode(subResult),
+          agentId: targetAgent.id,
+          nodeId: delegation.id
         });
       } catch (err: unknown) {
         const message = getErrorMessage(err);
@@ -409,6 +676,13 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
           text: `Apologies, I encountered an issue: ${message}`,
           timestamp: getTimestamp()
         });
+        addTrace(runState, runtimeOptions, {
+          type: 'error',
+          title: `${targetAgent.name} step failed`,
+          detail: message,
+          agentId: targetAgent.id,
+          nodeId: delegation.id
+        });
       }
       if (stepResults[delegation.id] && !stepResults[delegation.id].output.startsWith('Error:')) {
         onWorkflowNodeUpdate?.(delegation.id, { status: 'complete', output: summarizeForNode(stepResults[delegation.id].output) });
@@ -419,7 +693,120 @@ Do not write markdown formatting (like \`\`\`json) in your raw output, output on
       onThinking(targetAgent.id, false);
     }
 
+    // --- Step 2b: Penny critiques the run and may request one targeted repair pass ---
+    updateRunState(runState, runtimeOptions, { status: 'critiquing', activeStepId: undefined });
+    onThinking(secretary.id, true);
+    const critiquePrompt = `
+Review the current run state and specialist outputs. Decide whether the answer is sufficient or whether one more targeted specialist pass is needed.
+
+User objective:
+${userQuery}
+
+Current outputs:
+${formatStepResultsForSynthesis(stepResults, executionOrder)}
+
+Available specialists:
+${specialists.map(agent => `- ${agent.name} (${agent.role}): ${agent.title}`).join('\n')}
+
+Return only JSON:
+{
+  "sufficient": true,
+  "confidence": "low | medium | high",
+  "summary": "short evaluation",
+  "assumptions": ["..."],
+  "openQuestions": ["..."],
+  "decisions": ["..."],
+  "risks": ["..."],
+  "conflicts": ["..."],
+  "additionalDelegations": [
+    { "id": "repair_step_id", "agent": "${specialists.map(agent => agent.role).join(' | ')}", "label": "Short label", "prompt": "Focused repair instructions", "dependsOn": ["existing_step_id"] }
+  ],
+  "nextActions": ["..."]
+}
+Use additionalDelegations only when a concrete missing pass would materially improve the result. Limit to one additional delegation.
+`;
+    const critiqueRaw = await callModel(provider, model, secretary.systemPrompt || '', critiquePrompt, 2048);
+    onThinking(secretary.id, false);
+    const critique = extractCritique(critiqueRaw) ?? {
+      sufficient: true,
+      confidence: 'medium',
+      summary: 'The run completed without a structured critique response.',
+      assumptions: [],
+      openQuestions: [],
+      decisions: [],
+      risks: [],
+      conflicts: [],
+      additionalDelegations: [],
+      nextActions: []
+    };
+    const evaluation = critiqueToEvaluation(critique);
+    updateRunState(runState, runtimeOptions, {
+      confidence: critique.confidence,
+      summary: critique.summary,
+      assumptions: critique.assumptions ?? [],
+      openQuestions: critique.openQuestions ?? [],
+      decisions: critique.decisions ?? [],
+      risks: critique.risks ?? [],
+      conflicts: critique.conflicts ?? [],
+      evaluations: [...runState.evaluations, evaluation]
+    });
+    addTrace(runState, runtimeOptions, {
+      type: 'critique',
+      title: critique.sufficient ? 'Critique accepted run' : 'Critique requested repair',
+      detail: critique.summary
+    });
+
+    const repairDelegations = normalizeDelegations((critique.additionalDelegations ?? []).slice(0, 1), activeAgents);
+    if (!critique.sufficient && repairDelegations.length > 0) {
+      addTrace(runState, runtimeOptions, {
+        type: 'replan',
+        title: 'Repair pass added',
+        detail: repairDelegations.map(delegation => `${delegation.id}: ${delegation.agent}`).join('\n')
+      });
+
+      for (const delegation of repairDelegations) {
+        const targetAgent = activeAgents.find(a => a.role === delegation.agent || a.id === delegation.agent);
+        if (!targetAgent) continue;
+        const stepModel = selectModelForStep(model, targetAgent, delegation.id, runtimeOptions);
+        updateRunState(runState, runtimeOptions, { status: 'executing', activeStepId: delegation.id });
+        addTrace(runState, runtimeOptions, {
+          type: 'step-start',
+          title: `${targetAgent.name} started repair pass`,
+          detail: delegation.prompt,
+          agentId: targetAgent.id,
+          nodeId: delegation.id
+        });
+        onThinking(targetAgent.id, true);
+        const dependencyContext = formatDependencyContext(delegation, stepResults);
+        const prompt = buildDelegationPrompt(userQuery, delegation, dependencyContext, allSources);
+        const output = await callModel(provider, stepModel, targetAgent.systemPrompt || '', prompt);
+        stepResults[delegation.id] = {
+          id: delegation.id,
+          label: delegation.label,
+          agentRole: targetAgent.role,
+          agentName: targetAgent.name,
+          output
+        };
+        synthesisOrder.push(delegation);
+        onThinking(targetAgent.id, false);
+        onStep(targetAgent.id, { id: uuid(), sender: targetAgent.name, role: 'agent', text: output, timestamp: getTimestamp() });
+        const outputKnowledge = outputToKnowledgeItem(stepResults[delegation.id]);
+        runtimeOptions.onKnowledgeItems?.([outputKnowledge]);
+        updateRunState(runState, runtimeOptions, {
+          knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, [outputKnowledge.id])
+        });
+        addTrace(runState, runtimeOptions, {
+          type: 'step-complete',
+          title: `${targetAgent.name} completed repair pass`,
+          detail: summarizeForNode(output),
+          agentId: targetAgent.id,
+          nodeId: delegation.id
+        });
+      }
+    }
+
     // --- Step 3: Penny synthesizes all inputs and responds to the user ---
+    updateRunState(runState, runtimeOptions, { status: 'synthesizing', activeStepId: workflow.synthesisNodeId });
     onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'thinking' });
     workflow.edges
       .filter(edge => edge.target === workflow.synthesisNodeId)
@@ -432,7 +819,7 @@ The team has finished their sub-tasks for this objective:
 ${userQuery}
 
 Execution trace:
-${formatStepResultsForSynthesis(stepResults, executionOrder)}
+${formatStepResultsForSynthesis(stepResults, synthesisOrder)}
 
 Based on their findings and your role as Penny (Executive Coordinator), present the final compiled solution to the User. Make it professional, beautifully structured with headings/markdown, and highlight which expert provided which insights.
 When sources are available, cite them by title or URL where relevant and distinguish sourced facts from recommendations.
@@ -441,6 +828,14 @@ Keep the tone direct and concise, avoiding excessive conversational filler, fluf
 
     const finalAnswer = await callModel(provider, model, secretary.systemPrompt || '', `${synthesisPrompt}${formatSourcesForPrompt(allSources)}`, 6144);
     onThinking(secretary.id, false);
+    updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined });
+    addTrace(runState, runtimeOptions, {
+      type: 'synthesis',
+      title: 'Final synthesis complete',
+      detail: summarizeForNode(finalAnswer),
+      agentId: secretary.id,
+      nodeId: workflow.synthesisNodeId
+    });
     onWorkflowNodeUpdate?.(workflow.synthesisNodeId, { status: 'complete', output: summarizeForNode(finalAnswer) });
     workflow.edges
       .filter(edge => edge.target === workflow.synthesisNodeId)
@@ -464,6 +859,8 @@ Keep the tone direct and concise, avoiding excessive conversational filler, fluf
 
   } catch (err: unknown) {
     const message = getErrorMessage(err);
+    updateRunState(runState, runtimeOptions, { status: 'error', summary: message, completedAt: new Date().toISOString(), activeStepId: undefined });
+    addTrace(runState, runtimeOptions, { type: 'error', title: 'Run failed', detail: message, agentId: secretary.id });
     onThinking(secretary.id, false);
     onStep(secretary.id, {
       id: uuid(),
@@ -488,7 +885,8 @@ export async function runAuthoredWorkflow(
   onWorkflowEdgeUpdate: (edgeId: string, update: Partial<WorkflowCanvasEdge>) => void,
   onFinalOutput: (message: ChatMessage) => void,
   onSources: (sources: SourceRecord[]) => void,
-  existingSources: SourceRecord[] = []
+  existingSources: SourceRecord[] = [],
+  runtimeOptions: ExecutionRuntimeOptions = {}
 ) {
   const activeAgents = agents.some(agent => agent.systemPrompt) ? agents : await loadAgentSystemPrompts(agents);
   const manager = getCoordinator(activeAgents);
@@ -497,6 +895,19 @@ export async function runAuthoredWorkflow(
   const uuid = () => Math.random().toString(36).substring(2, 9);
   const nodeOutputs: Record<string, string> = {};
   let allSources = [...existingSources];
+  const runState = createRunState(userQuery, 'authored', provider, model);
+  emitRunState(runState, runtimeOptions);
+  updateRunState(runState, runtimeOptions, { status: 'executing' });
+  addTrace(runState, runtimeOptions, {
+    type: 'plan',
+    title: 'Authored workflow loaded',
+    detail: agentNodes.map(node => `${node.id}: ${node.label}`).join('\n')
+  });
+  const initialKnowledge = sourcesToKnowledgeItems(existingSources);
+  if (initialKnowledge.length > 0) {
+    runtimeOptions.onKnowledgeItems?.(initialKnowledge);
+    updateRunState(runState, runtimeOptions, { knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, initialKnowledge.map(item => item.id)) });
+  }
 
   onStep(manager.id, {
     id: uuid(),
@@ -509,11 +920,20 @@ export async function runAuthoredWorkflow(
   for (const node of agentNodes) {
     const agent = activeAgents.find(item => item.id === node.agentId);
     if (!agent) continue;
+    const stepModel = selectModelForStep(model, agent, node.id, runtimeOptions);
 
     const incomingEdges = edges.filter(edge => edge.target === node.id);
     incomingEdges.forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: true }));
     onWorkflowNodeUpdate(node.id, { status: 'thinking' });
     onThinking(agent.id, true);
+    updateRunState(runState, runtimeOptions, { activeStepId: node.id });
+    addTrace(runState, runtimeOptions, {
+      type: 'step-start',
+      title: `${agent.name} started ${node.label}`,
+      detail: node.prompt || `Contribute your ${agent.title} expertise to this workflow.`,
+      agentId: agent.id,
+      nodeId: node.id
+    });
 
     const upstreamContext = incomingEdges
       .map(edge => nodeOutputs[edge.source] ? `Output from ${edge.source}:\n${nodeOutputs[edge.source]}` : '')
@@ -523,20 +943,57 @@ export async function runAuthoredWorkflow(
     const defaultPrompt = `Contribute your ${agent.title} expertise to this workflow.`;
     let runSources = allSources;
     if (agent.role === 'researcher') {
+      const toolCall = addToolCall(runState, runtimeOptions, {
+        toolId: RUNTIME_TOOLS.webSearch.id,
+        toolName: RUNTIME_TOOLS.webSearch.name,
+        requestedBy: agent.name,
+        input: `${userQuery}\n${node.prompt || defaultPrompt}`,
+        status: 'running'
+      });
       const foundSources = await searchWeb(`${userQuery}\n${node.prompt || defaultPrompt}`, agent.name);
       if (foundSources.length > 0) {
         onSources(foundSources);
         allSources = [...allSources, ...foundSources];
         runSources = allSources;
+        const knowledgeItems = sourcesToKnowledgeItems(foundSources);
+        const evidenceClaims = createEvidenceClaims(foundSources, agent.name);
+        runtimeOptions.onKnowledgeItems?.(knowledgeItems);
+        runtimeOptions.onEvidenceClaims?.(evidenceClaims);
+        updateRunState(runState, runtimeOptions, {
+          knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, knowledgeItems.map(item => item.id)),
+          evidenceClaimIds: mergeUnique(runState.evidenceClaimIds, evidenceClaims.map(claim => claim.id))
+        });
       }
+      updateToolCall(runState, runtimeOptions, toolCall.id, {
+        status: foundSources.length > 0 ? 'complete' : 'error',
+        outputSummary: foundSources.length > 0 ? `${foundSources.length} sources found` : 'No sources returned',
+        sourceIds: foundSources.map(source => source.id)
+      });
+      addTrace(runState, runtimeOptions, {
+        type: 'tool-call',
+        title: RUNTIME_TOOLS.webSearch.name,
+        detail: foundSources.length > 0 ? `${foundSources.length} sources attached` : 'Search returned no sources',
+        agentId: agent.id,
+        nodeId: node.id
+      });
     }
 
     const prompt = `${node.prompt || defaultPrompt}\n\nUser request:\n${userQuery}\n\n${upstreamContext ? `Upstream context:\n${upstreamContext}` : ''}${formatSourcesForPrompt(runSources)}`;
 
     try {
-      const output = await callModel(provider, model, agent.systemPrompt || '', prompt);
+      const output = await callModel(provider, stepModel, agent.systemPrompt || '', prompt);
       nodeOutputs[node.id] = output;
       onWorkflowNodeUpdate(node.id, { status: 'complete', output: summarizeForNode(output) });
+      const outputKnowledge = outputToKnowledgeItem({ id: node.id, label: node.label, agentName: agent.name, agentRole: agent.role, output });
+      runtimeOptions.onKnowledgeItems?.([outputKnowledge]);
+      updateRunState(runState, runtimeOptions, { knowledgeItemIds: mergeUnique(runState.knowledgeItemIds, [outputKnowledge.id]) });
+      addTrace(runState, runtimeOptions, {
+        type: 'step-complete',
+        title: `${agent.name} completed ${node.label}`,
+        detail: summarizeForNode(output),
+        agentId: agent.id,
+        nodeId: node.id
+      });
       onStep(agent.id, {
         id: uuid(),
         sender: agent.name,
@@ -548,11 +1005,32 @@ export async function runAuthoredWorkflow(
       const message = getErrorMessage(error);
       nodeOutputs[node.id] = `Error: ${message}`;
       onWorkflowNodeUpdate(node.id, { status: 'error', output: message });
+      addTrace(runState, runtimeOptions, {
+        type: 'error',
+        title: `${agent.name} step failed`,
+        detail: message,
+        agentId: agent.id,
+        nodeId: node.id
+      });
     } finally {
       incomingEdges.forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: false }));
       onThinking(agent.id, false);
     }
   }
+
+  updateRunState(runState, runtimeOptions, { status: 'critiquing', activeStepId: undefined });
+  const authoredEvaluation: RunEvaluation = {
+    id: `eval-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    reviewer: 'system',
+    rating: Object.values(nodeOutputs).some(output => output.startsWith('Error:')) ? 2 : 3,
+    summary: Object.values(nodeOutputs).some(output => output.startsWith('Error:')) ? 'Authored workflow completed with at least one step error.' : 'Authored workflow completed and is ready for synthesis.',
+    strengths: ['Authored execution used the visible canvas graph.'],
+    gaps: Object.values(nodeOutputs).some(output => output.startsWith('Error:')) ? ['Review failed steps before relying on the synthesis.'] : [],
+    nextActions: ['Review final synthesis and rerun any weak step from the canvas.'],
+    timestamp: new Date().toISOString()
+  };
+  updateRunState(runState, runtimeOptions, { evaluations: [...runState.evaluations, authoredEvaluation], summary: authoredEvaluation.summary });
+  addTrace(runState, runtimeOptions, { type: 'critique', title: 'Authored workflow evaluation', detail: authoredEvaluation.summary });
 
   const synthesisNode = nodes.find(node => node.type === 'synthesis') ?? {
     id: 'synthesis',
@@ -563,11 +1041,20 @@ export async function runAuthoredWorkflow(
   onWorkflowNodeUpdate(synthesisNode.id, { status: 'thinking' });
   edges.filter(edge => edge.target === synthesisNode.id).forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: true }));
   onThinking(manager.id, true);
+  updateRunState(runState, runtimeOptions, { status: 'synthesizing', activeStepId: synthesisNode.id });
 
   const workflowOutputs = Object.entries(nodeOutputs).map(([id, output]) => `\n## ${id}\n${output}`).join('\n');
   const synthesisPrompt = `Synthesize this authored workflow into a polished final output. Cite available sources by title or URL where relevant.\n\nUser request:\n${userQuery}\n\nWorkflow outputs:\n${workflowOutputs}${formatSourcesForPrompt(allSources)}`;
   const finalAnswer = await callModel(provider, model, manager.systemPrompt || '', synthesisPrompt, 6144);
   onThinking(manager.id, false);
+  updateRunState(runState, runtimeOptions, { status: 'complete', completedAt: new Date().toISOString(), activeStepId: undefined });
+  addTrace(runState, runtimeOptions, {
+    type: 'synthesis',
+    title: 'Final synthesis complete',
+    detail: summarizeForNode(finalAnswer),
+    agentId: manager.id,
+    nodeId: synthesisNode.id
+  });
   onWorkflowNodeUpdate(synthesisNode.id, { status: 'complete', output: summarizeForNode(finalAnswer) });
   edges.filter(edge => edge.target === synthesisNode.id).forEach(edge => onWorkflowEdgeUpdate(edge.id, { active: false }));
   onFinalOutput({ id: uuid(), sender: manager.name, role: 'agent', text: finalAnswer, timestamp: getTimestamp() });
