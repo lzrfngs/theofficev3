@@ -204,7 +204,7 @@ I would treat this as a foresight pass, not a prediction.
     name: 'Vadim',
     title: 'AI & Systems Architect',
     role: 'tech_expert',
-    avatar: '/portraits/Tetsuo.png',
+    avatar: '/portraits/Vadim.png',
     color: '#22d3ee',
     badgeClass: 'badge-tech',
     activeClass: 'active-tech',
