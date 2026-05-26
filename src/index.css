@@ -1892,7 +1892,7 @@ button.agent-roster__item {
 
 .portrait-container-full {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   background: var(--surface-3);
   position: relative;
