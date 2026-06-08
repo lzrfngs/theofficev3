@@ -1,0 +1,101 @@
+Executive assessment
+The Office v3 is strongest as a legible, user-friendly “multi-agent theater” for creative/strategic collaboration, but it is not yet a deeply intelligent agent system. Its current design emphasizes clear role prompts, visible workflow graphs, and user control over robust state, real dependency execution, retrieval depth, tool use, or evaluation. That makes it feel approachable and trustworthy, but it caps capability. The center of gravity is a single manager prompt plus sequential specialist calls, not a true agent runtime. (See /home/runner/work/theofficev3/theofficev3/README.md:3-30, /home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:133-316.)
+
+What is architecturally strong today
+Clear mental model. The product framing is coherent: Penny coordinates specialists, renders a visible workflow, and synthesizes the result. That improves perceived intelligence because users can see who did what. (/home/runner/work/theofficev3/theofficev3/README.md:3-8, /home/runner/work/theofficev3/theofficev3/src/components/WorkflowCanvas.tsx:149-220)
+Prompt architecture is maintainable. Agent instructions live as markdown “source of truth” and are imported into a typed catalog. That is a good separation of role design from UI wiring. (/home/runner/work/theofficev3/theofficev3/docs/agents/README.md:1-12, /home/runner/work/theofficev3/theofficev3/src/data/agents.ts:1-11)
+Good prompt transparency. Users can inspect agent system prompts in the UI, which is unusually strong for trust/debuggability. (/home/runner/work/theofficev3/theofficev3/src/components/AgentPanel.tsx:96-104, :161-174)
+Human-in-the-loop workflow authoring exists. Users can drag agents onto a canvas, edit prompts, connect steps, and run authored flows. That is the most important existing foundation for higher intelligence because it exposes orchestration as a manipulable artifact. (/home/runner/work/theofficev3/theofficev3/src/App.tsx:287-336, :397-437, /home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:339-434)
+Model-provider abstraction is decent. A server-side router supports multiple LLM backends and keeps secrets out of the browser. (/home/runner/work/theofficev3/theofficev3/api/generate.ts:25-73, /home/runner/work/theofficev3/theofficev3/src/components/SettingsModal.tsx:31-67)
+Basic evidence channel exists. Manual sources plus Tavily search results can be attached to runs, which is better than pure prompt-only generation. (/home/runner/work/theofficev3/theofficev3/src/types/workflow.ts:26-35, /home/runner/work/theofficev3/theofficev3/api/search.ts:55-80, /home/runner/work/theofficev3/theofficev3/src/components/SourcesPanel.tsx:15-63)
+Core bottlenecks limiting “intelligence”
+1) Orchestration is mostly prompt-shaped, not execution-shaped
+The system asks Penny to create a dependency-aware workflow, but the runtime does not really honor that structure in automatic mode.
+
+Penny is instructed to emit step ids and dependsOn, and even to reuse specialists in loops. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:168-191)
+But automatic execution just iterates normalizedDelegations in order; it does not topologically schedule, gate by dependencies, or pass dependency outputs into later steps. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:233-285)
+dependsOn is used mainly to draw edges in the canvas. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:475-529)
+Implication: the graph looks smarter than the runtime actually is. This is the biggest capability/perception gap in the repo.
+
+2) Repeated-agent loops are conceptually allowed but semantically broken
+The planner explicitly allows using the same specialist multiple times. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:175-176) But automatic results are stored by agent name, so a second pass overwrites the first. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:231, :257, :268, :297)
+
+Implication: multi-pass reasoning is advertised but not preserved, which directly weakens any iterative intelligence.
+
+3) Memory/state is mostly UI persistence, not cognitive state
+The app stores chats, workflow nodes, edges, outputs, sources, and view selection in localStorage. (/home/runner/work/theofficev3/theofficev3/src/App.tsx:21-28, :93-115) But model calls are largely stateless per run: callModel takes only system + prompt; chat history is not threaded into prompts. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:80-104) There is no explicit run state for:
+
+goals
+assumptions
+open questions
+evidence confidence
+decisions taken
+unresolved conflicts
+Implication: the app remembers what happened for the user, but the agents do not really remember what happened for reasoning.
+
+4) Retrieval is shallow
+Retrieval currently means:
+
+manual sources entered by the user (/home/runner/work/theofficev3/theofficev3/src/components/SourcesPanel.tsx:15-63)
+Tavily snippets for the researcher only (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:248-255, /home/runner/work/theofficev3/theofficev3/api/search.ts:55-80)
+prompt injection of those snippets as plain text (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:127-129)
+There is no document ingestion, chunking, embedding retrieval, long-term memory, repo/file retrieval, semantic search, or citation grounding layer.
+
+Implication: the system can browse lightly, but it cannot build a reliable knowledge substrate.
+
+5) Tool use is minimal
+The only real runtime tools exposed to agents are:
+
+/api/generate for text models (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:81-104)
+/api/search for web search (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:106-125)
+/api/generate-image exists but is not integrated into orchestration flow (/home/runner/work/theofficev3/theofficev3/README.md:25, /home/runner/work/theofficev3/theofficev3/api/generate-image.ts:20-69)
+And search is restricted to the researcher role only. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:249-255, :385-390)
+
+Implication: specialists are persona prompts, not tool-augmented experts.
+
+6) Intent handling is fully LLM-driven despite having metadata
+The catalog contains specialtyKeywords for every agent. (/home/runner/work/theofficev3/theofficev3/src/data/agents.ts:24, :39, :64, :90, :115, :136, :161, :187) But runtime routing does not use them; intent handling is left entirely to Penny’s planning prompt. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:161-195, :452-472)
+
+Implication: routing is flexible, but brittle. There is no deterministic backstop for obvious intents.
+
+7) Evaluation/feedback mechanisms are largely absent
+I found no test script in package.json and no test/spec files in the repo. (/home/runner/work/theofficev3/theofficev3/package.json:6-10) There is also no built-in:
+
+response grading
+citation verification
+hallucination checks
+user rating loop
+trace store
+prompt/version experiment harness
+The closest thing to an eval mindset lives only in the tech expert prompt. (/home/runner/work/theofficev3/theofficev3/docs/agents/tech_expert.md:15-16, :45-53)
+
+Implication: intelligence improvements will be hard to measure, not just hard to build.
+
+Important design constraints
+Static Vite app + Vercel serverless favors simplicity over durable state/services. (/home/runner/work/theofficev3/theofficev3/README.md:55-61, /home/runner/work/theofficev3/theofficev3/vite.config.ts:1-7)
+Client-visible prompts improve trust but eliminate hidden orchestration logic. (/home/runner/work/theofficev3/theofficev3/src/components/AgentPanel.tsx:161-174)
+Single global provider/model means no per-step specialization. (/home/runner/work/theofficev3/theofficev3/src/App.tsx:72-78, /home/runner/work/theofficev3/theofficev3/src/components/SettingsModal.tsx:120-126)
+Perceived cognition is partly simulated. The runtime inserts sleeps for “breathing room” instead of streaming incremental reasoning. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:243-245, :293-304)
+Prioritized recommendations
+Quick wins
+Make automatic dependencies real. Execute auto-plans topologically and pass dependency outputs into dependent prompts, not just into the canvas.
+Fix repeated-agent result storage. Key outputs by step id, not agent name.
+Use fresh sources in synthesis. Right now newly found sources help the researcher step but are not fully propagated into final synthesis. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:248-256, :303; /home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:385-393, :427)
+Add a deterministic pre-router. Use specialtyKeywords as a heuristic prior before asking Penny to plan.
+Validate planner JSON more robustly. Current parsing is brittle and fallback defaults to the first two specialists, which can be wildly wrong for technical tasks. (/home/runner/work/theofficev3/theofficev3/src/services/coordinator.ts:197-215)
+Medium-term improvements
+Introduce explicit run-state memory. Track objective, assumptions, evidence, conflicts, unanswered questions, and decisions as structured state.
+Add critique/replan loops. After specialist execution, let Penny decide whether the answer is sufficient, needs more evidence, or needs another pass.
+Expand tool registry. Add first-class tool abstractions instead of hardcoding “researcher gets web search.”
+Add citation-aware synthesis. Make outputs reference sources explicitly and carry confidence labels, consistent with Mira’s prompt design. (/home/runner/work/theofficev3/theofficev3/docs/agents/researcher.md:54-59)
+Support per-step model selection. Some steps want fast/cheap routing; others want higher-quality synthesis.
+Longer-term architectural bets
+Turn the app into a real workflow runtime. Make the graph executable state, not just a UI reflection.
+Build a shared knowledge layer. Add ingestion, retrieval, and long-term memory so agents reason over a durable corpus, not just current prompt text.
+Create an eval/telemetry system. Store traces, planner outputs, chosen agents, sources used, user edits, and outcome ratings.
+Unify auto and manual workflows. Today there are effectively two orchestration modes; longer-term they should share one typed execution engine.
+Move from personas to capabilities. Keep the office metaphor, but underneath it use capability-based agents with tools, memory, and typed outputs.
+Bottom line
+Current strength: the repo already has excellent foundations for legibility, controllability, and prompt modularity.
+Current ceiling: it lacks the execution semantics, memory model, retrieval depth, tool abstraction, and eval loop needed for genuinely smarter behavior.
+Best path: preserve the visible “office” metaphor, but upgrade the internals from persona orchestration to stateful capability orchestration.

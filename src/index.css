@@ -1908,8 +1908,14 @@ button.agent-roster__item {
 }
 
 .portrait-container-full {
-  width: 100%;
+  /* Drive the size from height so the portrait stays a true square (no
+     weird letterbox cropping). It shrinks on short laptop screens to leave
+     room for the chat history + input below, and centers horizontally. */
+  height: clamp(180px, 32vh, 420px);
   aspect-ratio: 1 / 1;
+  max-width: 100%;
+  margin-inline: auto;
+  flex-shrink: 0;
   overflow: hidden;
   background: var(--surface-3);
   position: relative;
@@ -1984,6 +1990,8 @@ button.agent-roster__item {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
+  flex-shrink: 1;
+  min-height: 200px;
   overflow: hidden;
   background: var(--surface-0);
 }
